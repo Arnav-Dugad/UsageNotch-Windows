@@ -1,0 +1,39 @@
+<Window x:Class="UsageNotch.AlertWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:UsageNotch.Controls"
+        Title="UsageNotch alert" Icon="Assets/UsageNotch.ico" Width="380" SizeToContent="Height"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
+        ShowInTaskbar="False" ShowActivated="False" Topmost="True" UseLayoutRounding="True">
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource DockText}"/>
+            <Setter Property="Background" Value="{DynamicResource DockRaised}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="Surface" CornerRadius="9" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center"/></Border>
+                <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource DockRaisedHover}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="Surface" Property="Opacity" Value=".65"/></Trigger></ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+    </Window.Resources>
+    <Border x:Name="Card" Margin="14" Padding="18,16" CornerRadius="20" Background="{DynamicResource DockFill}" BorderBrush="{DynamicResource DockHairline}" BorderThickness="1">
+        <Border.RenderTransform><TranslateTransform x:Name="Slide"/></Border.RenderTransform>
+        <Border.Effect><DropShadowEffect BlurRadius="20" ShadowDepth="5" Opacity=".25"/></Border.Effect>
+        <StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Border Background="{DynamicResource DockRaised}" Width="34" Height="34" CornerRadius="11"><controls:ProviderLogo Provider="{Binding ProviderId}" Colored="True" Width="20" Height="20"/></Border>
+                <StackPanel Grid.Column="1" Margin="11,0,8,0">
+                    <TextBlock x:Name="Eyebrow" Text="USAGE UPDATE" Foreground="{DynamicResource DockMuted}" FontSize="9" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Title}" Foreground="{DynamicResource DockText}" FontSize="14" FontWeight="SemiBold" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <Button Grid.Column="2" Content="×" Padding="8,2" FontSize="19" VerticalAlignment="Top" Click="Dismiss_Click" ToolTip="Dismiss this alert"/>
+            </Grid>
+            <TextBlock Text="{Binding Message}" Foreground="{DynamicResource DockMuted}" FontSize="12" TextWrapping="Wrap" LineHeight="18" Margin="0,14,0,12"/>
+            <controls:SmoothProgressBar x:Name="Meter" Height="4" Value="{Binding UsedFraction, TargetNullValue=0}" TrackBrush="{DynamicResource DockRingTrack}" Margin="0,0,0,15"/>
+            <Grid><TextBlock Text="UsageNotch" FontSize="10" Foreground="{DynamicResource DockFaint}" VerticalAlignment="Center"/><Button Content="Snooze 1 hour" HorizontalAlignment="Right" Click="Snooze_Click" FontSize="11"/></Grid>
+        </StackPanel>
+    </Border>
+</Window>

@@ -1,0 +1,220 @@
+<Window x:Class="UsageNotch.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:UsageNotch.Controls"
+        xmlns:local="clr-namespace:UsageNotch"
+        xmlns:models="clr-namespace:UsageNotch.Models"
+        Title="UsageNotch" Icon="Assets/UsageNotch.ico" Width="100" Height="450"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
+    <Window.Resources>
+        <local:NullToBoolConverter x:Key="NullToBool"/>
+        <local:ResetTextConverter x:Key="ResetText"/>
+        <local:LiveResetTextConverter x:Key="LiveResetText"/>
+        <local:FractionToPercentConverter x:Key="PercentText"/>
+        <local:FractionToRemainingConverter x:Key="RemainingText"/>
+        <local:UsageBrushConverter x:Key="UsageBrush"/>
+        <local:UsageTextBrushConverter x:Key="UsageTextBrush"/>
+        <local:UsageDisplayConverter x:Key="UsageDisplay"/>
+        <local:PresenceToVisibilityConverter x:Key="Presence"/>
+        <local:IndexToDelayConverter x:Key="IndexDelay"/>
+        <local:LimitAmountConverter x:Key="AmountText"/>
+        <BooleanToVisibilityConverter x:Key="BoolVisibility"/>
+        <QuinticEase x:Key="FluidEase" EasingMode="EaseOut"/>
+        <BackEase x:Key="PopEase" EasingMode="EaseOut" Amplitude="0.5"/>
+
+        <Style x:Key="CardButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource DockText}"/>
+            <Setter Property="Background" Value="{DynamicResource DockRaised}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="11,7"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontFamily" Value="{StaticResource UIFont}"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="9" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="Surface" Property="Background" Value="{DynamicResource DockRaisedHover}"/>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter TargetName="Surface" Property="Opacity" Value="0.62"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+
+        <Style x:Key="ProviderCellStyle" TargetType="Border">
+            <Setter Property="Width" Value="{Binding CellWidth}"/>
+            <Setter Property="Padding" Value="2,3"/>
+            <Setter Property="Margin" Value="{Binding CellMargin}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="CornerRadius" Value="16"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="Root" Opacity="0">
+        <Grid x:Name="DockShell" RenderTransformOrigin="1,0.5">
+            <Grid.RenderTransform>
+                <TransformGroup>
+                    <ScaleTransform x:Name="DockLift"/>
+                    <TranslateTransform x:Name="RootSlide"/>
+                </TransformGroup>
+            </Grid.RenderTransform>
+            <controls:DockSurface x:Name="DockBackground" Fill="{DynamicResource DockFill}" IsHitTestVisible="False"/>
+            <Border x:Name="Notch" Background="Transparent" Clip="{Binding Outline, ElementName=DockBackground}" Padding="0,58" MouseRightButtonUp="Notch_MouseRightButtonUp"
+                    PreviewMouseLeftButtonDown="Dock_PointerDown" PreviewMouseMove="Dock_PointerMove"
+                    PreviewMouseLeftButtonUp="Dock_PointerUp" LostMouseCapture="Dock_LostCapture">
+                <ItemsControl x:Name="ProviderList" ItemsSource="{Binding Items}" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate><DataTemplate>
+                        <Border Style="{StaticResource ProviderCellStyle}" MouseEnter="Cell_MouseEnter" MouseLeave="Cell_MouseLeave"
+                                MouseLeftButtonUp="Cell_MouseLeftButtonUp">
+                            <StackPanel HorizontalAlignment="Center">
+                                <Grid x:Name="RingHost" Width="{Binding RingSize}" Height="{Binding RingSize}">
+                                    <controls:ProgressRing
+                                        Value="{Binding RingFraction, TargetNullValue=0}"
+                                        SecondaryValue="{Binding SecondaryRingFraction}"
+                                        Remaining="{Binding ShowRemaining}"
+                                        SecondaryKnown="{Binding SecondaryKnown}"
+                                        Dual="{Binding Dual}"
+                                        ReducedMotion="{Binding ReducedMotion}"
+                                        TrackBrush="{DynamicResource DockRingTrack}"
+                                        IsKnown="{Binding UsedFraction, Converter={StaticResource NullToBool}}"
+                                        Status="{Binding Status}"/>
+                                    <controls:ProviderLogo Provider="{Binding Id}" Colored="{Binding ColoredLogos}"
+                                        Foreground="{DynamicResource DockText}"
+                                        Width="{Binding LogoSize}" Height="{Binding LogoSize}" IsHitTestVisible="False"/>
+                                </Grid>
+                                <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource DockMuted}" FontFamily="{StaticResource UIFont}"
+                                           FontSize="10" HorizontalAlignment="Center" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"
+                                           Visibility="{Binding ShowProviderNames, Converter={StaticResource BoolVisibility}}"/>
+                                <TextBlock Text="{Binding PercentText}" Foreground="{DynamicResource DockText}" FontFamily="{StaticResource UIFont}"
+                                           FontSize="{Binding PercentFontSize}" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,6,0,0"
+                                           Visibility="{Binding ShowPercentages, Converter={StaticResource BoolVisibility}}"/>
+                                <TextBlock Text="{Binding SecondaryLine}" Foreground="{DynamicResource DockFaint}" FontFamily="{StaticResource UIFont}"
+                                           FontSize="10" HorizontalAlignment="Center" Margin="0,1,0,0"
+                                           Visibility="{Binding SecondaryLine, Converter={StaticResource Presence}}"/>
+                                <Border Background="{DynamicResource DockRaised}" CornerRadius="6" Padding="5,1" Margin="0,4,0,0" HorizontalAlignment="Center"
+                                        Visibility="{Binding IsStale, Converter={StaticResource BoolVisibility}}">
+                                    <TextBlock Text="saved" Foreground="{DynamicResource DockFaint}" FontFamily="{StaticResource UIFont}" FontSize="8.5"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+        </Grid>
+
+        <Border x:Name="PeekStrip" Width="7" Background="#01000000" HorizontalAlignment="Right" Visibility="Collapsed"/>
+
+        <Popup x:Name="DetailPopup" AllowsTransparency="True" Placement="Left" StaysOpen="True" PopupAnimation="None" HorizontalOffset="-4">
+            <Grid x:Name="PopupCard" Width="368" Background="Transparent" Opacity="0" RenderTransformOrigin="1,0.5"
+                  MouseEnter="PopupCard_MouseEnter" MouseLeave="PopupCard_MouseLeave">
+                <Grid.RenderTransform><TransformGroup>
+                    <ScaleTransform x:Name="PopupScale"/>
+                    <TranslateTransform x:Name="PopupSlide"/>
+                </TransformGroup></Grid.RenderTransform>
+                <Grid.Effect><DropShadowEffect BlurRadius="30" ShadowDepth="9" Direction="270" Opacity="0.62" Color="Black"/></Grid.Effect>
+
+                <Path x:Name="PopupTail" Fill="{DynamicResource DockFill}" Data="M0,0 C4,13 11,18 30,25 C11,32 4,37 0,50 Z"
+                      Width="26" Height="46" Stretch="Fill" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,5,0"/>
+
+                <Border x:Name="PopupBody" Background="{DynamicResource DockFill}" CornerRadius="20" Margin="14,14,30,14" Padding="0"
+                        BorderBrush="{DynamicResource DockHairline}" BorderThickness="1">
+                    <ScrollViewer x:Name="CardScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="16,14,16,13">
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Border Width="30" Height="30" CornerRadius="10" Background="{DynamicResource DockRaised}">
+                                <controls:ProviderLogo Provider="{Binding Id}" Foreground="{DynamicResource DockText}" Colored="{Binding ColoredLogos}" Width="17" Height="17"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="10,0,8,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource DockText}" FontFamily="{StaticResource UIFont}"
+                                           FontSize="14.5" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding UpdatedText}" Foreground="{DynamicResource DockFaint}" FontFamily="{StaticResource UIFont}" FontSize="10.5" Margin="0,1,0,0"/>
+                                <TextBlock Text="{Binding AccountLabel}" ToolTip="{Binding AccountLabel}" TextTrimming="CharacterEllipsis" MaxWidth="194"
+                                           Foreground="{DynamicResource DockMuted}" FontSize="10" Margin="0,3,0,0" Visibility="{Binding AccountLabel, Converter={StaticResource Presence}}"/>
+                            </StackPanel>
+                            <Border Grid.Column="2" VerticalAlignment="Center" CornerRadius="7" Padding="8,3" Background="{Binding StatusPillBrush}">
+                                <TextBlock Text="{Binding StatusPill}" Foreground="{Binding StatusPillForeground}" FontFamily="{StaticResource UIFont}"
+                                           FontSize="10" FontWeight="SemiBold"/>
+                            </Border>
+                        </Grid>
+
+                        <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource DockMuted}" FontFamily="{StaticResource UIFont}"
+                                   FontSize="11.5" TextWrapping="Wrap" LineHeight="17.5" Margin="1,0,1,11"
+                                   Visibility="{Binding StatusText, Converter={StaticResource Presence}}"/>
+
+                        <ItemsControl ItemsSource="{Binding Windows}" AlternationCount="12" Visibility="{Binding HasWindows, Converter={StaticResource BoolVisibility}}">
+                                <ItemsControl.ItemTemplate><DataTemplate>
+                                    <Border Background="{DynamicResource DockRaised}" CornerRadius="13" Padding="12,10,12,11" Margin="0,0,0,7">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Label}" Foreground="{DynamicResource DockText}" FontFamily="{StaticResource UIFont}"
+                                                           FontSize="11.5" TextTrimming="CharacterEllipsis" ToolTip="{Binding Label}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1"
+                                                           FontFamily="{StaticResource UIFont}" FontSize="12.5" FontWeight="SemiBold">
+                                                    <TextBlock.Text><MultiBinding Converter="{StaticResource UsageDisplay}"><Binding Path="UsedFraction"/><Binding Path="DataContext.ShowRemaining" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/></MultiBinding></TextBlock.Text>
+                                                    <TextBlock.Foreground><MultiBinding Converter="{StaticResource UsageTextBrush}">
+                                                        <Binding Path="UsedFraction"/>
+                                                        <Binding Path="DataContext.SurfaceColor" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
+                                                    </MultiBinding></TextBlock.Foreground>
+                                                </TextBlock>
+                                            </Grid>
+                                            <controls:SmoothProgressBar Height="6" Margin="0,8,0,7"
+                                                TrackBrush="{DynamicResource DockRingTrack}"
+                                                Remaining="{Binding DataContext.ShowRemaining, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                Unknown="{Binding UsedFraction, Converter={StaticResource NullToBool}, ConverterParameter=invert}"
+                                                Delay="{Binding (ItemsControl.AlternationIndex), RelativeSource={RelativeSource AncestorType=ContentPresenter}, Converter={StaticResource IndexDelay}, ConverterParameter=65}"
+                                                ReducedMotion="{Binding DataContext.ReducedMotion, RelativeSource={RelativeSource AncestorType=ItemsControl}}">
+                                                <controls:SmoothProgressBar.Value><MultiBinding Converter="{StaticResource UsageDisplay}" ConverterParameter="fraction"><Binding Path="UsedFraction"/><Binding Path="DataContext.ShowRemaining" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/></MultiBinding></controls:SmoothProgressBar.Value>
+                                            </controls:SmoothProgressBar>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Converter={StaticResource AmountText}}" Foreground="{DynamicResource DockFaint}"
+                                                           FontFamily="{StaticResource UIFont}" FontSize="10" TextTrimming="CharacterEllipsis" Margin="0,0,8,0"/>
+                                                <TextBlock Grid.Column="1" Foreground="{DynamicResource DockFaint}" FontFamily="{StaticResource UIFont}" FontSize="10">
+                                                    <TextBlock.Text><MultiBinding Converter="{StaticResource LiveResetText}">
+                                                        <Binding Path="ResetsAt"/>
+                                                        <Binding Path="DataContext.ClockNow" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
+                                                    </MultiBinding></TextBlock.Text>
+                                                </TextBlock>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Border Height="1" Background="{DynamicResource DockHairline}" Margin="0,4,0,10"/>
+                        <WrapPanel>
+                            <Button Content="Refresh" Style="{StaticResource CardButton}" Margin="0,0,7,0" Click="Refresh_Click"/>
+                            <Button Content="{Binding DashboardLabel}" Style="{StaticResource CardButton}" Margin="0,0,7,0"
+                                    Visibility="{Binding ShowDashboard, Converter={StaticResource BoolVisibility}}" Click="Dashboard_Click"/>
+                            <Button Content="Fix sign-in" Click="GeminiHelp_Click">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource CardButton}">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static models:SnapshotStatus.NeedsAuth}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </WrapPanel>
+                    </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Popup>
+    </Grid>
+</Window>

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>UsageNotch</AssemblyName>
+    <RootNamespace>UsageNotch</RootNamespace>
+    <Version>2.0.1</Version>
+    <FileVersion>2.0.1.0</FileVersion>
+    <AssemblyVersion>2.0.1.0</AssemblyVersion>
+    <Product>UsageNotch</Product>
+    <Description>A fluid edge-pinned AI usage monitor for Windows.</Description>
+    <ApplicationIcon>Assets\UsageNotch.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\UsageNotch-logo.png" />
+    <Resource Include="Assets\UsageNotch.ico" />
+    <Resource Include="Assets\provider-logos.json" />
+    <Resource Include="Assets\THIRD-PARTY-NOTICES.txt" />
+    <EmbeddedResource Include="Assets\update-public-key.blob" />
+    <Compile Remove="Diagnostics\**\*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.8" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+</Project>

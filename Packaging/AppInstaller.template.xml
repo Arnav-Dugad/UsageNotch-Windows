@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppInstaller xmlns="http://schemas.microsoft.com/appx/appinstaller/2018" Version="__VERSION__" Uri="__BASE_URL__/UsageNotch.appinstaller">
+  <MainPackage Name="__IDENTITY__" Publisher="__PUBLISHER__" Version="__VERSION__" ProcessorArchitecture="x64" Uri="__BASE_URL__/UsageNotch-__VERSION__-x64.msix"/>
+  <UpdateSettings>
+    <OnLaunch HoursBetweenUpdateChecks="12" ShowPrompt="true" UpdateBlocksActivation="false"/>
+    <AutomaticBackgroundTask/>
+    <ForceUpdateFromAnyVersion>false</ForceUpdateFromAnyVersion>
+  </UpdateSettings>
+</AppInstaller>

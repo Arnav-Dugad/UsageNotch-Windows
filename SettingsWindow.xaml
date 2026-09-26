@@ -1,0 +1,519 @@
+<Window x:Class="UsageNotch.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:UsageNotch.Controls"
+        Title="UsageNotch · Stats &amp; Settings" Icon="Assets/UsageNotch.ico" Width="940" Height="820" WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Foreground="#F5F5F7" UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display" PreviewKeyDown="Window_PreviewKeyDown">
+    <Window.Resources>
+        <CubicEase x:Key="FluidEase" EasingMode="EaseOut" />
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="#0EFFFFFF" />
+            <Setter Property="BorderBrush" Value="#16FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Padding" Value="18,16" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#F7F7FA" />
+            <Setter Property="FontFamily" Value="{StaticResource UIFont}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+
+        <Style x:Key="GroupLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#7C7C87" />
+            <Setter Property="FontFamily" Value="{StaticResource UIFont}" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="3,4,0,8" />
+        </Style>
+
+        <Style x:Key="SecondaryText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#92929B" />
+            <Setter Property="FontFamily" Value="{StaticResource UIFont}" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="SliderLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#8FE9C4" />
+            <Setter Property="FontFamily" Value="{StaticResource UIFont}" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="Toggle" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#ECECF0" />
+            <Setter Property="FontFamily" Value="{StaticResource UIFont}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Margin" Value="0,7" />
+            <Setter Property="Template">
+                <Setter.Value><ControlTemplate TargetType="CheckBox">
+                    <Grid Background="Transparent">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <ContentPresenter VerticalAlignment="Center" Margin="0,0,14,0" />
+                        <Border x:Name="Track" Grid.Column="1" Width="42" Height="24" CornerRadius="12" Background="#30303A" BorderBrush="#25FFFFFF" BorderThickness="1">
+                            <Ellipse x:Name="Thumb" Width="18" Height="18" Margin="2.5,0,0,0" HorizontalAlignment="Left" Fill="#F5F5F7">
+                                <Ellipse.RenderTransform><TranslateTransform X="0" /></Ellipse.RenderTransform>
+                                <Ellipse.Effect><DropShadowEffect BlurRadius="5" ShadowDepth="1" Opacity="0.45" /></Ellipse.Effect>
+                            </Ellipse>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Track" Property="Background" Value="#FF2FD36F" />
+                            <Setter TargetName="Track" Property="BorderBrush" Value="#FF2FD36F" />
+                            <Trigger.EnterActions><BeginStoryboard HandoffBehavior="SnapshotAndReplace"><Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Thumb" Storyboard.TargetProperty="RenderTransform.X" To="18.5" Duration="0:0:0.22" EasingFunction="{StaticResource FluidEase}" />
+                            </Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard HandoffBehavior="SnapshotAndReplace"><Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Thumb" Storyboard.TargetProperty="RenderTransform.X" To="0" Duration="0:0:0.22" EasingFunction="{StaticResource FluidEase}" />
+                            </Storyboard></BeginStoryboard></Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Track" Property="Opacity" Value="0.86" /></Trigger>
+                        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.42" /></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate></Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Field" TargetType="TextBox">
+            <Setter Property="Foreground" Value="#F3F3F6" />
+            <Setter Property="CaretBrush" Value="#F3F3F6" />
+            <Setter Property="Background" Value="#99000000" />
+            <Setter Property="BorderBrush" Value="#24FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="11,9" />
+            <Setter Property="FontFamily" Value="{StaticResource UIFont}" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Template">
+                <Setter.Value><ControlTemplate TargetType="TextBox">
+                    <Border x:Name="FieldBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10">
+                        <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FieldBorder" Property="BorderBrush" Value="#CC7A9CFF" /></Trigger>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="FieldBorder" Property="Background" Value="#B3000000" /></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate></Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PasswordField" TargetType="PasswordBox">
+            <Setter Property="Foreground" Value="#F3F3F6" /><Setter Property="CaretBrush" Value="#F3F3F6" />
+            <Setter Property="Background" Value="#99000000" /><Setter Property="BorderBrush" Value="#24FFFFFF" /><Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="11,9" /><Setter Property="FontFamily" Value="{StaticResource UIFont}" /><Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Template">
+                <Setter.Value><ControlTemplate TargetType="PasswordBox">
+                    <Border x:Name="FieldBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10">
+                        <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FieldBorder" Property="BorderBrush" Value="#CC7A9CFF" /></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate></Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Segment" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#A8A8B0" /><Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="16,8" /><Setter Property="Cursor" Value="Hand" /><Setter Property="FontFamily" Value="{StaticResource UIFont}" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
+                <Border x:Name="SegmentSurface" CornerRadius="9" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsChecked" Value="True"><Setter TargetName="SegmentSurface" Property="Background" Value="#2EFFFFFF" /><Setter Property="Foreground" Value="White" /></Trigger>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SegmentSurface" Property="Opacity" Value="0.85" /></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#E8E8ED" /><Setter Property="Background" Value="#15FFFFFF" /><Setter Property="BorderBrush" Value="#20FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" /><Setter Property="Padding" Value="16,9" /><Setter Property="Cursor" Value="Hand" /><Setter Property="FontFamily" Value="{StaticResource UIFont}" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="ButtonSurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="11" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonSurface" Property="Background" Value="#26FFFFFF" /></Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="ButtonSurface" Property="Opacity" Value="0.7" /></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="Foreground" Value="White" /><Setter Property="Background" Value="#FF5468E8" /><Setter Property="BorderBrush" Value="#FF6E80F0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style TargetType="Slider">
+            <Setter Property="Margin" Value="0,4,0,0"/>
+            <Setter Property="IsSnapToTickEnabled" Value="True"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
+                <Grid Background="Transparent">
+                    <Track x:Name="PART_Track" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                           Value="{Binding Value, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                        <Track.DecreaseRepeatButton><RepeatButton Command="{x:Static Slider.DecreaseLarge}" Focusable="False">
+                            <RepeatButton.Template><ControlTemplate TargetType="RepeatButton">
+                                <Border Background="#FF5FDCA4" Height="4" CornerRadius="2" VerticalAlignment="Center"/>
+                            </ControlTemplate></RepeatButton.Template>
+                        </RepeatButton></Track.DecreaseRepeatButton>
+                        <Track.Thumb><Thumb Width="17" Height="17" Cursor="Hand">
+                            <Thumb.Template><ControlTemplate TargetType="Thumb">
+                                <Grid>
+                                    <Ellipse x:Name="Halo" Fill="#405FDCA4" Width="24" Height="24" Opacity="0"/>
+                                    <Ellipse x:Name="Handle" Fill="#FAFAFC" Width="17" Height="17">
+                                        <Ellipse.Effect><DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.5"/></Ellipse.Effect>
+                                    </Ellipse>
+                                </Grid>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Halo" Property="Opacity" Value="1"/></Trigger>
+                                    <Trigger Property="IsDragging" Value="True">
+                                        <Setter TargetName="Halo" Property="Opacity" Value="1"/>
+                                        <Setter TargetName="Handle" Property="Fill" Value="#FF9BF0CB"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate></Thumb.Template>
+                        </Thumb></Track.Thumb>
+                        <Track.IncreaseRepeatButton><RepeatButton Command="{x:Static Slider.IncreaseLarge}" Focusable="False">
+                            <RepeatButton.Template><ControlTemplate TargetType="RepeatButton">
+                                <Border Background="#33FFFFFF" Height="4" CornerRadius="2" VerticalAlignment="Center"/>
+                            </ControlTemplate></RepeatButton.Template>
+                        </RepeatButton></Track.IncreaseRepeatButton>
+                    </Track>
+                </Grid>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+
+        <Style x:Key="NavTab" TargetType="TabItem">
+            <Setter Property="Foreground" Value="#A0A0AA"/>
+            <Setter Property="FontFamily" Value="{StaticResource UIFont}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem">
+                <Border x:Name="Chip" CornerRadius="11" Margin="0,1,0,1" Padding="13,10" Background="Transparent">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="3"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Border x:Name="Marker" Grid.Column="0" Width="3" Height="15" CornerRadius="2" Background="#FF5468E8" Opacity="0" HorizontalAlignment="Left"/>
+                        <ContentPresenter Grid.Column="1" ContentSource="Header" VerticalAlignment="Center" Margin="11,0,0,0"/>
+                    </Grid>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chip" Property="Background" Value="#12FFFFFF"/></Trigger>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter TargetName="Chip" Property="Background" Value="#1EFFFFFF"/>
+                        <Setter TargetName="Marker" Property="Opacity" Value="1"/>
+                        <Setter Property="Foreground" Value="#FFFFFF"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+
+        <Style x:Key="NavTabs" TargetType="TabControl">
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabControl">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <StackPanel IsItemsHost="True" Grid.Column="0" Margin="18,2,12,4" VerticalAlignment="Top"/>
+                    <Border Grid.Column="0" Width="1" Background="#14FFFFFF" HorizontalAlignment="Right" Margin="0,2,0,8"/>
+                    <ContentPresenter Grid.Column="1" x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" Margin="14,0,0,0"/>
+                </Grid>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="SettingsRoot" Opacity="0" RenderTransformOrigin="0.5,0.5">
+        <Grid.RenderTransform><ScaleTransform x:Name="SettingsScale" ScaleX="0.975" ScaleY="0.975" /></Grid.RenderTransform>
+        <Border Margin="20" Background="#FB0E0E12" BorderBrush="#2AFFFFFF" BorderThickness="1" CornerRadius="24">
+            <Border.Effect><DropShadowEffect Color="#000000" BlurRadius="46" Opacity="0.7" ShadowDepth="12" /></Border.Effect>
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Height="78" Background="Transparent" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <StackPanel Margin="24,16,0,0" Orientation="Horizontal">
+                        <Image Source="Assets/UsageNotch-logo.png" Width="42" Height="42" Stretch="Uniform" Margin="0,0,13,0" />
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="UsageNotch" FontFamily="{StaticResource UIFont}" FontSize="21" FontWeight="SemiBold" Foreground="#FAFAFC" />
+                            <TextBlock x:Name="VersionLine" Text="Your usage. Your way.  ·  1.5" Style="{StaticResource SecondaryText}" Margin="0,2,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="✕" Width="34" Height="34" Margin="0,16,18,0" VerticalAlignment="Top"
+                            FontSize="13" Style="{StaticResource SecondaryButton}" Padding="0" Click="Cancel_Click" />
+                </Grid>
+
+                <TabControl x:Name="SettingsTabs" Grid.Row="1" Style="{StaticResource NavTabs}" TabStripPlacement="Left" Background="Transparent" BorderThickness="0">
+
+                    <TabItem Header="Stats" Style="{StaticResource NavTab}">
+                        <controls:StatsDashboard x:Name="StatsView"/>
+                    </TabItem>
+
+                    <TabItem Header="Settings · Display" Style="{StaticResource NavTab}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6,0,22,4"><StackPanel>
+                            <TextBlock Text="AT A GLANCE" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <TextBlock Text="What each ring shows" Style="{StaticResource SectionTitle}"/>
+                                <TextBlock Text="Classic mirrors the reference design. Orbit layers two independent limits around one logo." Style="{StaticResource SecondaryText}" Margin="0,5,0,12"/>
+                                <Border Background="#7A000000" CornerRadius="12" Padding="4" BorderBrush="#18FFFFFF" BorderThickness="1">
+                                    <UniformGrid Columns="2" Rows="2">
+                                        <RadioButton x:Name="ModeSession" Content="Classic · 5-hour" GroupName="Mode" Style="{StaticResource Segment}" Checked="Preview_Changed"/>
+                                        <RadioButton x:Name="ModeWeekly" Content="Weekly · 7-day" GroupName="Mode" Style="{StaticResource Segment}" Checked="Preview_Changed"/>
+                                        <RadioButton x:Name="ModeDual" Content="Orbit · both limits" GroupName="Mode" Style="{StaticResource Segment}" Checked="Preview_Changed"/>
+                                        <RadioButton x:Name="ModeHighest" Content="Most used" GroupName="Mode" Style="{StaticResource Segment}" Checked="Preview_Changed"/>
+                                    </UniformGrid>
+                                </Border>
+                                <Border Background="#0A0A0C" CornerRadius="15" Padding="16" Margin="0,14,0,0" BorderBrush="#14FFFFFF" BorderThickness="1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <Grid Width="60" Height="60">
+                                            <controls:ProgressRing x:Name="PreviewRing" Value="0.73" SecondaryValue="0.34" SecondaryKnown="True" Dual="True" Status="Ok" ReducedMotion="True"/>
+                                            <controls:ProviderLogo x:Name="PreviewLogo" Provider="claude" Colored="True" Width="25" Height="25"/>
+                                        </Grid>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
+                                            <TextBlock x:Name="PreviewHeadline" Text="73%" Foreground="#F0F0F3" FontFamily="{StaticResource UIFont}" FontSize="21" FontWeight="SemiBold"/>
+                                            <TextBlock x:Name="PreviewCaption" Text="Outer ring = session · inner ring = week" Style="{StaticResource SecondaryText}" Margin="0,3,0,0"/>
+                                            <TextBlock Text="Live preview — sample values" Foreground="#65656B" FontFamily="{StaticResource UIFont}" FontSize="10" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <TextBlock Text="Gemini uses its first two model buckets. These are coding-tool quotas, not ChatGPT or Gemini web-chat usage." Style="{StaticResource SecondaryText}" Margin="0,12,0,0"/>
+                            </StackPanel></Border>
+
+                            <TextBlock Text="ON THE DOCK" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <TextBlock Text="Used or remaining" Style="{StaticResource SectionTitle}"/>
+                                <TextBlock Text="Choose what the numbers and rings mean. Warning colours always show how close you are to the limit." Style="{StaticResource SecondaryText}" Margin="0,5,0,10"/>
+                                <UniformGrid Columns="2"><RadioButton x:Name="ValueUsed" Content="Usage used" GroupName="ValueMode" Style="{StaticResource Segment}"/><RadioButton x:Name="ValueRemaining" Content="Usage remaining" GroupName="ValueMode" Style="{StaticResource Segment}"/></UniformGrid>
+                            </StackPanel></Border>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <CheckBox x:Name="PercentBox" Content="Percentage under each ring" Style="{StaticResource Toggle}" Checked="Preview_Changed" Unchecked="Preview_Changed"/>
+                                <CheckBox x:Name="NamesBox" Content="Provider names" Style="{StaticResource Toggle}"/>
+                                <CheckBox x:Name="AccountNamesBox" Content="Account name in detail cards" Style="{StaticResource Toggle}"/>
+                                <CheckBox x:Name="SleekBox" Content="Sleek proportions (slimmer dock and smaller logos)" Style="{StaticResource Toggle}"/>
+                                <CheckBox x:Name="LogoColorBox" Content="Brand colours for provider logos" Style="{StaticResource Toggle}" Checked="Preview_Changed" Unchecked="Preview_Changed"/>
+                                <CheckBox x:Name="CompactBox" Content="Compact dock (smaller rings, no labels)" Style="{StaticResource Toggle}"/>
+                                <CheckBox x:Name="DashboardBox" Content="Always show the dashboard button in the detail card" Style="{StaticResource Toggle}"/>
+                            </StackPanel></Border>
+                        </StackPanel></ScrollViewer>
+                    </TabItem>
+
+                    <TabItem Header="Appearance" Style="{StaticResource NavTab}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6,0,22,4"><StackPanel>
+                            <TextBlock Text="SIZE AND POSITION" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <Grid><TextBlock Text="Dock size" Style="{StaticResource SectionTitle}"/><TextBlock x:Name="ScaleValue" Style="{StaticResource SliderLabel}" HorizontalAlignment="Right"/></Grid>
+                                <Slider x:Name="ScaleSlider" Minimum="0.75" Maximum="1.5" TickFrequency="0.05" Margin="0,6,0,16"/>
+                                <Grid><TextBlock Text="Space between providers" Style="{StaticResource SectionTitle}"/><TextBlock x:Name="SpacingValue" Style="{StaticResource SliderLabel}" HorizontalAlignment="Right"/></Grid>
+                                <Slider x:Name="SpacingSlider" Minimum="4" Maximum="48" TickFrequency="2" Margin="0,6,0,16"/>
+                                    <Grid><TextBlock Text="Position along screen edge" Style="{StaticResource SectionTitle}"/><TextBlock x:Name="PositionValue" Style="{StaticResource SliderLabel}" HorizontalAlignment="Right"/></Grid>
+                                <Slider x:Name="PositionSlider" Minimum="0" Maximum="1" TickFrequency="0.05" Margin="0,6,0,16"/>
+                                <Grid><TextBlock Text="Dock opacity" Style="{StaticResource SectionTitle}"/><TextBlock x:Name="OpacityValue" Style="{StaticResource SliderLabel}" HorizontalAlignment="Right"/></Grid>
+                                <Slider x:Name="OpacitySlider" Minimum="0.3" Maximum="1" TickFrequency="0.05" Margin="0,6,0,4"/>
+                            </StackPanel></Border>
+
+                            <TextBlock Text="SURFACE" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <TextBlock Text="Dock and detail-card colour" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                                <WrapPanel>
+                                    <Button Content="Ink" Tag="#0B0B0E" Click="ColorPreset_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,7,7"/>
+                                    <Button Content="True black" Tag="#000000" Click="ColorPreset_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,7,7"/>
+                                    <Button Content="Graphite" Tag="#1C1C22" Click="ColorPreset_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,7,7"/>
+                                    <Button Content="Snow" Tag="#FFFFFF" Click="ColorPreset_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,7,7"/>
+                                    <Button Content="Choose colour…" Click="CustomColor_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,7,7"/>
+                                    <Border x:Name="ColorSwatch" Width="34" Height="34" CornerRadius="10" BorderBrush="#55555F" BorderThickness="1" Margin="4,0,0,7"/>
+                                </WrapPanel>
+                                <TextBlock x:Name="ColorLabel" Style="{StaticResource SecondaryText}" Margin="0,6,0,10"/>
+                                <CheckBox x:Name="GlassBox" Content="Glass sheen on the dock surface" Style="{StaticResource Toggle}"/>
+                                <CheckBox x:Name="FloatingBox" Content="Free-floating dock (drag to position)" Style="{StaticResource Toggle}"/>
+                                <TextBlock Text="Drag any icon or empty dock space to move it. Drop it near a screen edge and it snaps back into the notch shape." Style="{StaticResource SecondaryText}" Margin="0,2,0,10"/>
+                                <CheckBox x:Name="SnapBox" Content="Snap to the screen edge when dropped nearby" Style="{StaticResource Toggle}"/>
+                                <CheckBox x:Name="PredictiveBox" Content="Anticipate drag direction" Style="{StaticResource Toggle}"/>
+                                <TextBlock Text="The shape gently reaches toward your next edge. Icons stay upright; the layout changes when you release. Reduced motion turns this preview off." Style="{StaticResource SecondaryText}" Margin="0,2,0,8"/>
+                                <TextBlock Text="Screen edge" Style="{StaticResource SectionTitle}" Margin="0,12,0,8"/>
+                                <Border Background="#78000000" CornerRadius="11" Padding="3" HorizontalAlignment="Left">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton x:Name="EdgeRight" Content="Right" GroupName="Edge" Style="{StaticResource Segment}" />
+                                        <RadioButton x:Name="EdgeLeft" Content="Left" GroupName="Edge" Style="{StaticResource Segment}" />
+                                        <RadioButton x:Name="EdgeTop" Content="Top" GroupName="Edge" Style="{StaticResource Segment}" />
+                                    </StackPanel>
+                                </Border>
+                                <Button Content="Restore default appearance" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Margin="0,16,0,0" Click="RestoreAppearance_Click"/>
+                            </StackPanel></Border>
+                        </StackPanel></ScrollViewer>
+                    </TabItem>
+
+                    <TabItem Header="Behaviour" Style="{StaticResource NavTab}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6,0,22,4"><StackPanel>
+                            <TextBlock Text="WINDOW" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <CheckBox x:Name="AlwaysVisibleBox" Content="Keep above other windows" Style="{StaticResource Toggle}" />
+                                <CheckBox x:Name="TrayBox" Content="Show system tray icon" Style="{StaticResource Toggle}" />
+                                <CheckBox x:Name="StartupBox" Content="Start UsageNotch when I sign in" Style="{StaticResource Toggle}" />
+                                <CheckBox x:Name="ClickThroughBox" Content="Click through the dock (ignore the mouse entirely)" Style="{StaticResource Toggle}" />
+                                <TextBlock Text="With click-through on, the dock becomes purely decorative. Turn it back off from the tray icon." Style="{StaticResource SecondaryText}" Margin="0,2,0,0"/>
+                            </StackPanel></Border>
+
+                            <TextBlock Text="HIDE UNTIL HOVER" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <CheckBox x:Name="AutoHideBox" Content="Tuck the dock off-screen when the mouse leaves" Style="{StaticResource Toggle}" />
+                                <Grid Margin="0,8,0,0"><TextBlock Text="Wait before tucking away" Style="{StaticResource SectionTitle}"/><TextBlock x:Name="AutoHideValue" Style="{StaticResource SliderLabel}" HorizontalAlignment="Right"/></Grid>
+                                <Slider x:Name="AutoHideSlider" Minimum="150" Maximum="4000" TickFrequency="50" Margin="0,6,0,4"/>
+                                <TextBlock Text="A thin strip stays at the screen edge; touch it and the dock glides back." Style="{StaticResource SecondaryText}"/>
+                            </StackPanel></Border>
+
+                            <TextBlock Text="GLOBAL HOTKEYS" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <CheckBox x:Name="HotkeyBox" Content="Enable global hotkeys" Style="{StaticResource Toggle}" />
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="Show / hide the dock" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
+                                    <TextBox x:Name="ToggleHotkeyField" Grid.Column="1" Width="188" Style="{StaticResource Field}" IsReadOnly="True"
+                                             TextAlignment="Center" PreviewKeyDown="Hotkey_PreviewKeyDown" GotFocus="Hotkey_GotFocus" LostFocus="Hotkey_LostFocus"/>
+                                </Grid>
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="Refresh every provider" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
+                                    <TextBox x:Name="RefreshHotkeyField" Grid.Column="1" Width="188" Style="{StaticResource Field}" IsReadOnly="True"
+                                             TextAlignment="Center" PreviewKeyDown="Hotkey_PreviewKeyDown" GotFocus="Hotkey_GotFocus" LostFocus="Hotkey_LostFocus"/>
+                                </Grid>
+                                <TextBlock Text="Click a field and press the combination you want. Needs at least one of Ctrl, Alt, Shift or Win." Style="{StaticResource SecondaryText}" Margin="0,10,0,0"/>
+                            </StackPanel></Border>
+
+                            <TextBlock Text="MOTION AND REFRESH" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <CheckBox x:Name="ReducedMotionBox" Content="Reduce motion" Style="{StaticResource Toggle}"/>
+                                <Grid Margin="0,8,0,0"><TextBlock Text="Hover delay before the card opens" Style="{StaticResource SectionTitle}"/><TextBlock x:Name="HoverValue" Style="{StaticResource SliderLabel}" HorizontalAlignment="Right"/></Grid>
+                                <Slider x:Name="HoverSlider" Minimum="0" Maximum="500" TickFrequency="10" Margin="0,6,0,16"/>
+                                <Grid><TextBlock Text="Account refresh interval" Style="{StaticResource SectionTitle}"/><TextBlock x:Name="PollValue" Style="{StaticResource SliderLabel}" HorizontalAlignment="Right"/></Grid>
+                                <Slider x:Name="PollSlider" Minimum="60" Maximum="900" TickFrequency="30" Margin="0,6,0,4"/>
+                            </StackPanel></Border>
+                        </StackPanel></ScrollViewer>
+                    </TabItem>
+
+                    <TabItem Header="Alerts" Style="{StaticResource NavTab}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6,0,22,4"><StackPanel>
+                            <TextBlock Text="THRESHOLDS" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <CheckBox x:Name="AlertsBox" Content="Notify me as limits fill up" Style="{StaticResource Toggle}"/>
+                                <Grid Margin="0,10,0,0"><TextBlock Text="First warning at" Style="{StaticResource SectionTitle}"/><TextBlock x:Name="WarnValue" Style="{StaticResource SliderLabel}" HorizontalAlignment="Right"/></Grid>
+                                <Slider x:Name="WarnSlider" Minimum="30" Maximum="95" TickFrequency="5" Margin="0,6,0,16"/>
+                                <Grid><TextBlock Text="Urgent warning at" Style="{StaticResource SectionTitle}"/><TextBlock x:Name="CriticalValue" Style="{StaticResource SliderLabel}" HorizontalAlignment="Right"/></Grid>
+                                <Slider x:Name="CriticalSlider" Minimum="50" Maximum="100" TickFrequency="5" Margin="0,6,0,10"/>
+                                <CheckBox x:Name="ResetAlertBox" Content="Tell me when a limit resets" Style="{StaticResource Toggle}"/>
+                                <CheckBox x:Name="SoundBox" Content="Play a sound with alerts" Style="{StaticResource Toggle}"/>
+                                <CheckBox x:Name="AlertCardsBox" Content="Use the new floating alert cards" Style="{StaticResource Toggle}"/>
+                                <TextBlock Text="Each limit window notifies once per level, per reset period — no repeat pings while you keep working." Style="{StaticResource SecondaryText}" Margin="0,8,0,0"/>
+                                <Button Content="Send a test notification" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Margin="0,14,0,0" Click="TestAlert_Click"/>
+                            </StackPanel></Border>
+                            <TextBlock Text="LESS INTERRUPTION" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <CheckBox x:Name="QuietBox" Content="Quiet hours" Style="{StaticResource Toggle}"/>
+                                <TextBlock Text="Warnings are saved below without popping up or playing a sound. Times use your computer's clock; equal start/end means all day." Style="{StaticResource SecondaryText}" Margin="0,4,0,12"/>
+                                <Grid><TextBlock Text="Start" Style="{StaticResource SectionTitle}"/><TextBlock x:Name="QuietStartValue" Style="{StaticResource SliderLabel}" HorizontalAlignment="Right"/></Grid>
+                                <Slider x:Name="QuietStartSlider" Minimum="0" Maximum="23" TickFrequency="1" IsSnapToTickEnabled="True" Margin="0,6,0,12"/>
+                                <Grid><TextBlock Text="End" Style="{StaticResource SectionTitle}"/><TextBlock x:Name="QuietEndValue" Style="{StaticResource SliderLabel}" HorizontalAlignment="Right"/></Grid>
+                                <Slider x:Name="QuietEndSlider" Minimum="0" Maximum="23" TickFrequency="1" IsSnapToTickEnabled="True" Margin="0,6,0,12"/>
+                                <WrapPanel><Button Content="Snooze 1 hour" Click="SnoozeAlerts_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/><Button Content="Resume alerts" Click="ResumeAlerts_Click" Style="{StaticResource SecondaryButton}"/></WrapPanel>
+                                <TextBlock x:Name="SnoozeStatus" Style="{StaticResource SecondaryText}" Margin="0,10,0,0"/>
+                            </StackPanel></Border>
+                            <TextBlock Text="RECENT ALERTS · THIS SESSION" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <TextBlock Text="The latest 40 alerts stay here, including quiet-hour warnings. Connection errors and saved readings never trigger usage warnings." Style="{StaticResource SecondaryText}" Margin="0,0,0,12"/>
+                                <ItemsControl x:Name="AlertHistory"><ItemsControl.ItemTemplate><DataTemplate>
+                                    <Border Background="#0CFFFFFF" CornerRadius="12" Padding="12" Margin="0,0,0,8"><StackPanel>
+                                        <DockPanel><TextBlock Text="{Binding TimeLabel}" Foreground="#A9A9B3" FontSize="10" DockPanel.Dock="Right"/><TextBlock Text="{Binding KindLabel}" Foreground="#8DDFC0" FontSize="10"/></DockPanel>
+                                        <TextBlock Text="{Binding Title}" Foreground="#F4F4F6" FontWeight="SemiBold" Margin="0,6,0,3"/>
+                                        <TextBlock Text="{Binding Message}" Foreground="#B9B9C2" TextWrapping="Wrap" FontSize="11"/>
+                                    </StackPanel></Border>
+                                </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                            </StackPanel></Border>
+                        </StackPanel></ScrollViewer>
+                    </TabItem>
+
+                    <TabItem Header="Providers" Style="{StaticResource NavTab}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6,0,22,4"><StackPanel>
+                            <TextBlock Text="SHOW ON THE DOCK" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <CheckBox x:Name="ClaudeBox" Content="Claude subscription / Claude Code" Style="{StaticResource Toggle}" />
+                                <CheckBox x:Name="CodexBox" Content="Codex / ChatGPT subscription" Style="{StaticResource Toggle}" />
+                                <CheckBox x:Name="GeminiBox" Content="Gemini / Google AI subscription" Style="{StaticResource Toggle}" />
+                                <CheckBox x:Name="CursorBox" Content="Cursor subscription" Style="{StaticResource Toggle}" />
+                                <CheckBox x:Name="OpenAiBox" Content="OpenAI API spend" Style="{StaticResource Toggle}" />
+                                <CheckBox x:Name="AnthropicBox" Content="Anthropic API spend" Style="{StaticResource Toggle}" />
+                            </StackPanel></Border>
+
+                            <TextBlock Text="GEMINI CONNECTION" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <TextBlock Text="If your card says this connection is no longer supported, sign-in already succeeded but Google rejected quota access. Reconnecting or buying an API key will not restore it." Style="{StaticResource SecondaryText}" Margin="0,0,0,12"/>
+                                <WrapPanel>
+                                    <Button Content="Step-by-step guide" Style="{StaticResource SecondaryButton}" Click="GeminiGuide_Click" Margin="0,0,8,8"/>
+                                    <Button Content="Connect Gemini with Google" Style="{StaticResource PrimaryButton}" Click="ConnectGemini_Click" Margin="0,0,8,8"/>
+                                </WrapPanel>
+                                <CheckBox x:Name="GeminiCloudBox" Content="Use configured Cloud project (Workspace / enterprise)" Style="{StaticResource Toggle}" Margin="0,8,0,4"/>
+                                <TextBlock Text="For personal sign-in keep this off. This opens Gemini CLI with Cloud credential overrides removed for that window only; your other apps and Windows settings are unchanged." Style="{StaticResource SecondaryText}" Margin="0,6,0,0"/>
+                            </StackPanel></Border>
+                        </StackPanel></ScrollViewer>
+                    </TabItem>
+
+                    <TabItem Header="API budgets" Style="{StaticResource NavTab}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6,0,22,4"><StackPanel>
+                            <TextBlock Text="OPENAI" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <TextBlock Text="Admin key" Style="{StaticResource SectionTitle}" />
+                                <TextBlock Text="Encrypted with Windows DPAPI for your account before it is written to disk. Leave blank to keep the saved key." Style="{StaticResource SecondaryText}" Margin="0,4,0,10" />
+                                <PasswordBox x:Name="OpenAiKey" Style="{StaticResource PasswordField}" Height="40" />
+                                <TextBlock Text="Monthly budget (USD)" Style="{StaticResource SecondaryText}" Margin="1,12,0,6" />
+                                <TextBox x:Name="OpenAiBudget" Style="{StaticResource Field}" Height="40" />
+                            </StackPanel></Border>
+                            <TextBlock Text="ANTHROPIC" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <TextBlock Text="Admin credential" Style="{StaticResource SectionTitle}" />
+                                <TextBlock Text="Encrypted with Windows DPAPI for your account. Leave blank to keep the saved credential." Style="{StaticResource SecondaryText}" Margin="0,4,0,10" />
+                                <PasswordBox x:Name="AnthropicKey" Style="{StaticResource PasswordField}" Height="40" />
+                                <TextBlock Text="Monthly budget (USD)" Style="{StaticResource SecondaryText}" Margin="1,12,0,6" />
+                                <TextBox x:Name="AnthropicBudget" Style="{StaticResource Field}" Height="40" />
+                            </StackPanel></Border>
+                            <TextBlock Text="Spend comes from each vendor's official cost-reporting API. A budget turns that spend into a percentage ring." Style="{StaticResource SecondaryText}" Margin="3,0,0,0"/>
+                        </StackPanel></ScrollViewer>
+                    </TabItem>
+                    <TabItem Header="Updates" Style="{StaticResource NavTab}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6,0,22,4"><StackPanel>
+                            <TextBlock Text="STAY CURRENT" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <TextBlock Text="Secure automatic updates" Style="{StaticResource SectionTitle}"/>
+                                <TextBlock Text="Checks GitHub every 6 hours and downloads verified releases. Updates apply when you next launch the app, or when you choose Restart to update." Style="{StaticResource SecondaryText}" Margin="0,8,0,12"/>
+                                <CheckBox x:Name="AutoUpdateBox" Content="Automatically check and download updates" Style="{StaticResource Toggle}"/>
+                                <TextBlock x:Name="UpdateStatus" Style="{StaticResource SecondaryText}" Margin="0,14,0,14"/>
+                                <WrapPanel>
+                                    <Button Content="Check now" Style="{StaticResource SecondaryButton}" Click="CheckUpdates_Click" Margin="0,0,8,8"/>
+                                    <Button x:Name="RestartUpdateButton" Content="Restart to update" Style="{StaticResource PrimaryButton}" Click="RestartUpdate_Click" IsEnabled="False" Margin="0,0,0,8"/>
+                                </WrapPanel>
+                            </StackPanel></Border>
+                            <TextBlock Text="Release metadata is signed. Downloads must match the signed SHA-256 hash. Older versions are rejected. The previous app is kept as a backup; your settings and usage history stay in place." Style="{StaticResource SecondaryText}"/>
+                        </StackPanel></ScrollViewer>
+                    </TabItem>
+                </TabControl>
+
+                <Grid Grid.Row="2" Margin="24,10,24,20">
+                    <Button Content="Icon credits" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Click="Credits_Click"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Cancel" MinWidth="96" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0" Click="Cancel_Click" />
+                        <Button Content="Save changes" MinWidth="126" Style="{StaticResource PrimaryButton}" Click="Save_Click" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
