@@ -44,6 +44,9 @@ internal static class HistoryUpdateChecks
         points = history.Read("test", key, "session", now.AddDays(-1));
         Check(points[^1].Period != points[^2].Period, "Usage drop separates period");
         Check(UsageForecast.Calculate(points, SnapshotStatus.Ok, now.AddMinutes(11)).PercentPerHour is null, "New reset needs learning");
+        history.Record(Snapshot(.06, now.AddMinutes(11).AddSeconds(30), now.AddHours(2).AddSeconds(-1)), now.AddMinutes(11).AddSeconds(30));
+        points = history.Read("test", key, "session", now.AddDays(-1));
+        Check(points[^1].Period == points[^2].Period, "Reset timestamp jitter must not restart learning");
         history.Record(Snapshot(.1, now.AddMinutes(12), now.AddHours(3)), now.AddMinutes(12));
         points = history.Read("test", key, "session", now.AddDays(-1));
         Check(points[^1].Period != points[^2].Period, "Reset timestamp separates period");

@@ -69,7 +69,9 @@ public sealed class UsageHistory
                         var lastAt = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(0));
                         var reset = reader.IsDBNull(2) ? (long?)null : reader.GetInt64(2);
                         if (at <= lastAt) continue;
-                        if (at - lastAt <= TimeSpan.FromMinutes(20) && used >= reader.GetDouble(1) - .0001 && reset == window.ResetsAt?.ToUnixTimeMilliseconds()
+                        var newReset = window.ResetsAt?.ToUnixTimeMilliseconds();
+                        var sameReset = reset is null ? newReset is null : newReset is { } reported && Math.Abs(reported - reset.Value) <= 120_000;
+                        if (at - lastAt <= TimeSpan.FromMinutes(20) && used >= reader.GetDouble(1) - .0001 && sameReset
                             && (reset is null || lastAt.ToUnixTimeMilliseconds() < reset)) period = reader.GetString(3);
                     }
                 }
