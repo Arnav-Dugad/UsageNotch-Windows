@@ -30,6 +30,24 @@ internal static class Program
             return 0;
         }
         if (args.Contains("--history-check")) { HistoryUpdateChecks.Run(); return 0; }
+        if (args.Length == 3 && args[0] == "--verify-history-copy")
+        {
+            using var connection = new Microsoft.Data.Sqlite.SqliteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+                { DataSource = args[2], Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly }.ToString());
+            connection.Open();
+            using (var attach = connection.CreateCommand())
+            { attach.CommandText = "ATTACH DATABASE $path AS previous"; attach.Parameters.AddWithValue("$path", args[1]); attach.ExecuteNonQuery(); }
+            using var check = connection.CreateCommand();
+            check.CommandText = "SELECT COUNT(*) FROM (SELECT provider,account,window,at,used,reset,period FROM previous.observations EXCEPT SELECT provider,account,window,at,used,reset,period FROM main.observations)";
+            if (Convert.ToInt64(check.ExecuteScalar()) != 0) throw new Exception("A previous observation is missing or changed.");
+            check.CommandText = "SELECT COUNT(*) FROM previous.observations";
+            Console.WriteLine($"PASS: all {check.ExecuteScalar()} pre-update observations preserved exactly."); return 0;
+        }
+        if (args.Contains("--update-check"))
+        {
+            using var updates = new UpdateService(); updates.CheckAsync().GetAwaiter().GetResult();
+            Console.WriteLine(updates.Status); return updates.Status.Contains("up to date") || updates.Ready ? 0 : 1;
+        }
         if (args.Contains("--workspace-preview")) return WorkspacePreview();
         if (args.Contains("--preview")) return Preview();
         if (args.Contains("--connect-gemini")) { GeminiSignIn.Launch(); return 0; }
