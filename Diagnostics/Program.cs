@@ -30,6 +30,7 @@ internal static class Program
             return 0;
         }
         if (args.Contains("--history-check")) { HistoryUpdateChecks.Run(); return 0; }
+        if (args.Contains("--workspace-preview")) return WorkspacePreview();
         if (args.Contains("--preview")) return Preview();
         if (args.Contains("--connect-gemini")) { GeminiSignIn.Launch(); return 0; }
         if (args.Contains("--check") || args.Contains("--upgrade-check"))
@@ -53,6 +54,7 @@ internal static class Program
     {
         HistoryUpdateChecks.Run();
         LayoutChecks.Run();
+        WorkspaceChecks.Run();
         UpgradeChecks.Run();
         CheckClaudeCooldown();
         ClaudeReliabilityChecks.Run();
@@ -410,6 +412,29 @@ internal static class Program
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         File.Delete(previewHistoryPath);
         return 0;
+    }
+
+    private static int WorkspacePreview()
+    {
+        var app = new App { IsReviewSession = true }; app.InitializeComponent();
+        var settings = new AppSettings { ReviewSession = true, ReducedMotion = false, GeminiEnabled = false, CursorEnabled = false, Edge = "Right" };
+        var folder = Path.Combine(Environment.CurrentDirectory, "Diagnostics", "Artifacts"); Directory.CreateDirectory(folder);
+        var history = new UsageHistory(Path.Combine(folder, "workspace-" + Guid.NewGuid().ToString("N") + ".db"));
+        using var coordinator = new UsageCoordinator(settings, history);
+        var now = DateTimeOffset.UtcNow;
+        foreach (var id in new[] { "claude", "codex" })
+        {
+            for (int i = 0; i <= 48; i++)
+            {
+                var at = now.AddMinutes(-240 + i * 5);
+                var snapshot = new ProviderSnapshot(id, id == "claude" ? "Claude · sample" : "Codex · sample", "", Fidelity.Manual, SnapshotStatus.Ok,
+                    [new(id == "claude" ? "five_hour" : "default-primary", "5-hour window", .08 + i * (id == "claude" ? .012 : .007), now.AddHours(id == "claude" ? 2 : 3)),
+                     new(id == "claude" ? "seven_day" : "default-secondary", "Weekly window", .2 + i * .002, now.AddDays(4))], FetchedAt: at, AccountName: "Preview fixture");
+                history.Record(snapshot, at); coordinator.Items.First(p => p.Id == id).Snapshot = snapshot;
+            }
+        }
+        var dock = new MainWindow(coordinator, settings); dock.Show(); dock.OpenSettings();
+        return app.Run();
     }
 
     /// <summary>Renders the capsule-to-teardrop blend so the morph can be inspected frame by frame.</summary>

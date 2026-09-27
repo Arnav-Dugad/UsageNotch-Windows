@@ -32,9 +32,9 @@ internal static class LayoutChecks
                 ReducedMotion = true, CursorEnabled = false, ShowRemaining = remaining, SleekMode = sleek };
             using var coordinator = new UsageCoordinator(settings);
             coordinator.Items[0].Snapshot = new("claude", "Claude", "", Fidelity.Manual, SnapshotStatus.Stale,
-                [new("five_hour", "Session", remaining ? 0 : .73), new("seven_day", "Week", remaining ? 0 : .07)], "Saved reading");
+                [new("five_hour", "5-hour window", remaining ? 0 : .73, DateTimeOffset.UtcNow.AddHours(3)), new("seven_day", "Weekly window", remaining ? 0 : .07, DateTimeOffset.UtcNow.AddDays(3))], "Saved reading");
             coordinator.Items[1].Snapshot = new("codex", "Codex", "", Fidelity.Manual, SnapshotStatus.Ok,
-                [new("default-primary", "Session", .21), new("default-secondary", "Week", .37)]);
+                [new("default-primary", "5-hour window", .21, DateTimeOffset.UtcNow.AddHours(4)), new("default-secondary", "Weekly window", .37, DateTimeOffset.UtcNow.AddDays(2))]);
             coordinator.Items[2].Snapshot = new("gemini", "Gemini", "", Fidelity.Manual, SnapshotStatus.Unsupported, [], "Not available");
             var window = new MainWindow(coordinator, settings);
             var root = (FrameworkElement)window.Content;
@@ -52,7 +52,7 @@ internal static class LayoutChecks
             if (edge == "Top")
             {
                 if (centres.Any(p => Math.Abs(p.Y - centres[0].Y) > 1.6)) throw new Exception("Top ring baseline alignment.");
-                if (Math.Abs((centres[2].X - centres[1].X) - (centres[1].X - centres[0].X)) > 1.6) throw new Exception("Unequal top column spacing.");
+                if (Math.Abs((centres[2].X - centres[1].X) - (centres[1].X - centres[0].X)) > 1.6) throw new Exception($"Unequal top column spacing: {floating}/{compact}/{scale}/{spacing}/{mode}/{showText}; centres={string.Join(';', centres)}");
                 if (centres[0].X < 16 || centres[^1].X > window.Width - 16) throw new Exception("Clipped top rings.");
             }
             else

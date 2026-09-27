@@ -1,4 +1,4 @@
-# UsageNotch 2.0.1 — quick start
+# UsageNotch 2.1.0 — quick start
 
 ## Start the updated app
 
@@ -10,9 +10,13 @@ If you ever lose the dock, just run `UsageNotch.exe` again — a second launch b
 
 The tray tooltip and Settings header identify the version. Old builds are in `Release/Archive` for recovery; do not launch those for everyday use. The ZIP `Release/UsageNotch-win-x64.zip` always contains the most recently built release. If Windows startup was already enabled, opening the new release updates its startup path automatically.
 
-## Stats, forecasts and updates in 2.0
+## Stats, forecasts and updates in 2.1
 
-Open **Stats & Settings** from the dock/tray menu or run `UsageNotch.exe --settings`. Stats is the first page. Choose a provider, limit window and time range. Charts show **usage used**, even when the dock shows remaining usage. History is local, retained for up to 30 days, and starts with successful readings collected while the app runs. There is no backfill. Providers without a reported account identity begin a new series each launch.
+Open **Stats & Settings** from the dock/tray menu or run `UsageNotch.exe --settings`. Claude and Codex are visible together, with independent limit buttons and time ranges. Charts show **usage used**, even when the dock shows remaining usage. History stays local with no automatic expiry. There is no backfill; data already deleted by older releases cannot be recovered. Providers without a reported account identity begin a new series each launch.
+
+Hover charts for exact readings; drag a chart or its overview to select an interval. Ctrl+wheel zooms. Reset period focuses the current period. Click a confidence label to read forecast assumptions. Dashed lines and shaded pace scenarios are estimates. Expand sessions, personal patterns or events for their evidence and coverage. Missing data never counts as inactivity.
+
+Resize the window by its edges, use the minimize/maximize buttons, or press F11 for full screen (Escape restores it). Dimensions are remembered. Dock hover remains available while this window is open. Expand **Usage inspector** in a provider hover card for its recent sparkline and estimate; **Explore history** opens that provider's card.
 
 **Usage-pace forecast · estimate** uses at least three observations across ten minutes in the same limit period. It shows percentage points per hour and an estimated time to the limit or percentage at reset. It assumes activity continues at the same pace; it is not a provider promise. Resets, gaps, stale data and insufficient history pause forecasting. Exact reset countdowns update every second, with the provider timestamp shown in your local timezone. An elapsed countdown awaits provider confirmation instead of claiming the quota has reset.
 

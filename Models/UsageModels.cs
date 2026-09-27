@@ -17,7 +17,11 @@ public sealed record LimitWindow(
     string? Detail = null,
     double? UsedAmount = null,
     double? LimitAmount = null,
-    string? Unit = null);
+    string? Unit = null)
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ResetLocalText => ResetsAt is { } at ? $"Resets {at.ToLocalTime():ddd, MMM d · HH:mm:ss zzz} (local)" : "Exact reset not reported";
+}
 
 public sealed record ProviderSnapshot(
     string Id,
@@ -140,6 +144,9 @@ public sealed class ProviderViewModel : INotifyPropertyChanged
     };
 
     public string ResetText => ResetTextConverter.Describe(PrimaryWindow?.ResetsAt);
+    public string DockResetLines => string.Join("\n", Windows.Where(w => w.ResetsAt is not null).Take(2).Select(w =>
+        $"{(w.Label.Contains("5-hour", StringComparison.OrdinalIgnoreCase) ? "5h" : w.Label.Contains("week", StringComparison.OrdinalIgnoreCase) ? "7d" : w.Label)} {w.ResetsAt!.Value.ToLocalTime():ddd HH:mm:ss}"));
+    public string DockResetTooltip => string.Join("\n", Windows.Select(w => w.Label + ": " + w.ResetLocalText));
     public DateTimeOffset ClockNow => DateTimeOffset.Now;
     public string RemainingText => UsedFraction is { } fraction ? $"{Math.Max(0, Math.Round((1 - fraction) * 100)):0}% left" : "";
 

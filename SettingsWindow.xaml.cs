@@ -82,8 +82,16 @@ public partial class SettingsWindow : Window
         UpdatePreview();
 
         Height = Math.Min(880, SystemParameters.WorkArea.Height - 30);
-        Width = Math.Min(940, SystemParameters.WorkArea.Width - 30);
+        Width = Math.Min(1260, SystemParameters.WorkArea.Width - 30);
+        if (!settings.ReviewSession) WindowPlacement.Restore(this);
+        SourceInitialized += (_, _) =>
+        {
+            if (WindowMaterials.Apply(this, transient: false)) WindowSurface.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(210, 16, 18, 24));
+        };
+        Closing += (_, _) => { if (!settings.ReviewSession && !_fullscreen) WindowPlacement.Save(this); };
         Loaded += SettingsWindow_Loaded;
+        UpdateFooter.Text = "History stored locally · F11 full screen";
+        UpdatesChanged();
     }
 
     // ---------------------------------------------------------------- live editing
@@ -118,6 +126,7 @@ public partial class SettingsWindow : Window
         foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
         {
             yield return child;
+            if (child is UsageNotch.Controls.StatsDashboard) continue;
             foreach (var nested in LogicalDescendants(child)) yield return nested;
         }
     }
@@ -444,13 +453,64 @@ public partial class SettingsWindow : Window
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (e.OriginalSource is DependencyObject source && FindButton(source)) return;
+        if (e.ClickCount == 2) { Maximize_Click(sender, e); return; }
         if (e.ButtonState == MouseButtonState.Pressed) DragMove();
+    }
+    private static bool FindButton(DependencyObject source)
+    {
+        for (DependencyObject? node = source; node is not null; node = System.Windows.Media.VisualTreeHelper.GetParent(node))
+            if (node is System.Windows.Controls.Primitives.ButtonBase) return true;
+        return false;
+    }
+    private bool _fullscreen;
+    private Rect _beforeFullscreen;
+    private WindowState _beforeState;
+    private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    private void Maximize_Click(object sender, RoutedEventArgs e)
+    {
+        if (_fullscreen) ToggleFullscreen();
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    }
+    private void Fullscreen_Click(object sender, RoutedEventArgs e) => ToggleFullscreen();
+    private void ToggleFullscreen()
+    {
+        if (!_fullscreen)
+        {
+            if (!_settings.ReviewSession) WindowPlacement.Save(this);
+            _beforeState = WindowState; _beforeFullscreen = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
+            WindowState = WindowState.Normal;
+            var screen = System.Windows.Forms.Screen.FromHandle(new System.Windows.Interop.WindowInteropHelper(this).Handle).Bounds;
+            var transform = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformFromDevice ?? System.Windows.Media.Matrix.Identity;
+            var topLeft = transform.Transform(new System.Windows.Point(screen.Left, screen.Top));
+            var bottomRight = transform.Transform(new System.Windows.Point(screen.Right, screen.Bottom));
+            ResizeMode = ResizeMode.NoResize; Left = topLeft.X; Top = topLeft.Y; Width = bottomRight.X - topLeft.X; Height = bottomRight.Y - topLeft.Y;
+            _fullscreen = true;
+        }
+        else
+        {
+            _fullscreen = false; ResizeMode = ResizeMode.CanResize;
+            Left = _beforeFullscreen.Left; Top = _beforeFullscreen.Top; Width = _beforeFullscreen.Width; Height = _beforeFullscreen.Height; WindowState = _beforeState;
+        }
+    }
+    public void ShowProvider(string id, System.Windows.Point? origin)
+    {
+        SettingsTabs.SelectedIndex = 0;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
+        {
+            var logo = StatsView.FocusProvider(id);
+            if (logo is not null && origin is { } start && !Motion.IsReduced(_settings)) ConnectedTransition.Play(this, logo, id, start);
+        }));
     }
 
     private void UpdatesChanged() => Dispatcher.InvokeAsync(() =>
     {
         if (System.Windows.Application.Current is not App app) return;
         UpdateStatus.Text = app.Updates.Status;
+        UpdateFooter.Text = app.Updates.Busy || app.Updates.Ready ? app.Updates.Status : "History stored locally · F11 full screen";
+        UpdateProgress.Visibility = app.Updates.Busy ? Visibility.Visible : Visibility.Collapsed;
+        UpdateProgress.IsIndeterminate = app.Updates.Progress is null;
+        UpdateProgress.Value = app.Updates.Progress ?? 0;
         RestartUpdateButton.IsEnabled = app.Updates.Ready;
     });
     private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
@@ -466,6 +526,8 @@ public partial class SettingsWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
+        if (e.Key == Key.Escape && _fullscreen) { ToggleFullscreen(); e.Handled = true; return; }
         if (e.Key != Key.Escape) return;
         if (ToggleHotkeyField.IsKeyboardFocused || RefreshHotkeyField.IsKeyboardFocused) return;
         Committed = false;

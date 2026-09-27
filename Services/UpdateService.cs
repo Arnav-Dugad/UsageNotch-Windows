@@ -17,6 +17,8 @@ public sealed class UpdateService : IDisposable
     private readonly CancellationTokenSource _stop = new();
     public string Status { get; private set; } = "No update check yet.";
     public bool Ready { get; private set; }
+    public bool Busy { get; private set; }
+    public double? Progress { get; private set; }
     public event Action? Changed;
     private void Report(string value) { Status = value; Changed?.Invoke(); }
 
@@ -39,6 +41,7 @@ public sealed class UpdateService : IDisposable
         if (!await _gate.WaitAsync(0)) return;
         try
         {
+            Busy = true; Progress = null;
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
             timeout.CancelAfter(TimeSpan.FromMinutes(5));
             var ct = timeout.Token;
@@ -54,7 +57,8 @@ public sealed class UpdateService : IDisposable
             try
             {
                 await DownloadFileAsync(new Uri(manifest.Url), download, manifest.Size, ct);
-                VerifyFile(download, manifest);
+                Progress = null; Report("Download complete · verifying publisher signature, size and SHA-256…");
+                await Task.Run(() => VerifyFile(download, manifest), ct);
                 File.Move(download, Path.Combine(StageDirectory, "UsageNotch.exe"), true);
                 File.WriteAllBytes(Path.Combine(StageDirectory, "update.json"), manifestBytes);
                 File.WriteAllText(Path.Combine(StageDirectory, "update.sig"), signature);
@@ -67,7 +71,7 @@ public sealed class UpdateService : IDisposable
         catch (OperationCanceledException) { Report("Update check timed out or was cancelled. Try again later."); }
         catch (Exception e) when (e is HttpRequestException or IOException or UnauthorizedAccessException or CryptographicException or JsonException or FormatException or ArgumentException)
         { Report("Update could not be verified or downloaded. Your current app is unchanged."); }
-        finally { _gate.Release(); }
+        finally { Busy = false; Progress = null; Changed?.Invoke(); _gate.Release(); }
     }
 
     public static Version CurrentVersion => typeof(UpdateService).Assembly.GetName().Version ?? new Version(0, 0, 0);
@@ -126,9 +130,17 @@ public sealed class UpdateService : IDisposable
         using var response = await GetAsync(uri, ct);
         using var source = await response.Content.ReadAsStreamAsync(ct);
         using var target = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-        await CopyBounded(source, target, size, ct);
+        var watch = Stopwatch.StartNew(); long lastReport = -1;
+        await CopyBounded(source, target, size, ct, total =>
+        {
+            if (watch.ElapsedMilliseconds - lastReport < 120 && total != size) return;
+            lastReport = watch.ElapsedMilliseconds;
+            Progress = Math.Clamp(total * 100d / size, 0, 100);
+            var speed = total / Math.Max(.1, watch.Elapsed.TotalSeconds) / 1048576;
+            Report($"Downloading update · {Progress:0}% · {total / 1048576d:0.0} / {size / 1048576d:0.0} MB · {speed:0.0} MB/s");
+        });
     }
-    private static async Task CopyBounded(Stream source, Stream target, long maximum, CancellationToken ct)
+    private static async Task CopyBounded(Stream source, Stream target, long maximum, CancellationToken ct, Action<long>? progress = null)
     {
         var buffer = new byte[65536]; long total = 0;
         while (true)
@@ -136,6 +148,7 @@ public sealed class UpdateService : IDisposable
             var count = await source.ReadAsync(buffer, ct); if (count == 0) return;
             total += count; if (total > maximum) throw new CryptographicException("Download exceeds signed size.");
             await target.WriteAsync(buffer.AsMemory(0, count), ct);
+            progress?.Invoke(total);
         }
     }
 
@@ -162,7 +175,16 @@ public sealed class UpdateService : IDisposable
         { Report("The staged update could not be applied. Your current app is unchanged."); return false; }
     }
 
-    public static bool ApplyFromArguments(string[] args)
+    public static async Task<bool> ApplyFromArgumentsAsync(string[] args)
+    {
+        if (args.Length == 0 || args[0] != "--apply-update") return false;
+        var app = System.Windows.Application.Current;
+        app.ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown;
+        var progress = new UsageNotch.Controls.UpdateProgressWindow(); progress.Show();
+        await Task.Run(() => ApplyFromArguments(args, message => progress.Dispatcher.InvokeAsync(() => progress.SetStage(message))));
+        progress.Close(); return true;
+    }
+    public static bool ApplyFromArguments(string[] args, Action<string>? report = null)
     {
         if (args.Length == 0 || args[0] != "--apply-update") return false;
         try
@@ -170,7 +192,9 @@ public sealed class UpdateService : IDisposable
             if (args.Length != 3 || !int.TryParse(args[1], out var pid)) throw new IOException("Invalid update arguments.");
             var target = Path.GetFullPath(args[2]);
             if (!Path.GetFileName(target).Equals("UsageNotch.exe", StringComparison.OrdinalIgnoreCase) || !File.Exists(target)) throw new IOException("Invalid update target.");
-            try { using var parent = Process.GetProcessById(pid); if (!parent.WaitForExit(30000)) return true; } catch (ArgumentException) { }
+            report?.Invoke("Waiting for UsageNotch to close…");
+            try { using var parent = Process.GetProcessById(pid); if (!parent.WaitForExit(30000)) throw new IOException("App did not close in time."); } catch (ArgumentException) { }
+            report?.Invoke("Verifying the publisher's signed release…");
             var manifest = VerifyManifest(File.ReadAllBytes(Path.Combine(StageDirectory, "update.json")), File.ReadAllText(Path.Combine(StageDirectory, "update.sig")));
             var oldVersion = Version.Parse(FileVersionInfo.GetVersionInfo(target).FileVersion!);
             if (Version.Parse(manifest.Version) <= oldVersion) return true;
@@ -178,11 +202,14 @@ public sealed class UpdateService : IDisposable
             var adjacent = target + "." + Guid.NewGuid().ToString("N") + ".new";
             var backup = target + ".previous";
             // Copy first, verify that exact copy, then atomically replace on the target volume.
+            report?.Invoke("Preparing the new version · preserving your current app…");
             File.Copy(candidate, adjacent);
             try
             {
                 VerifyFile(adjacent, manifest);
+                report?.Invoke("Installing verified files · keeping a rollback copy…");
                 File.Replace(adjacent, target, backup, true);
+                report?.Invoke("Update installed · restarting UsageNotch…");
                 try { _ = Process.Start(new ProcessStartInfo(target) { UseShellExecute = false }) ?? throw new IOException("Could not restart app."); }
                 catch { File.Replace(backup, target, null); Process.Start(new ProcessStartInfo(target) { UseShellExecute = false }); throw; }
             }

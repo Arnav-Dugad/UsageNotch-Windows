@@ -60,7 +60,22 @@ internal static class HistoryUpdateChecks
         Check(UsageForecast.Calculate(flat, SnapshotStatus.Ok, now).Summary == "No increase observed", "Flat pace must not predict exhaustion");
         Check(UsageForecast.Calculate(flat.Select(p => p with { Reset = null }).ToArray(), SnapshotStatus.Ok, now).PercentPerHour is null, "Unknown reset suppresses projection");
         history.Record(Snapshot(.5, now.AddDays(31), now.AddDays(32)), now.AddDays(31));
-        Check(history.Read("test", key, "session", now.AddDays(-1)).Count == 1, "30-day retention");
+        Check(history.Read("test", key, "session", now.AddDays(-1)).Count == points.Count + 1, "Unlimited retention preserves readings older than 30 days");
+        var overview = history.ReadOverview("test", key, "session");
+        Check(history.Error is null && overview.Count > 1 && overview[0].At == points[0].At, "All-history SQL overview preserves first observation");
+        var events = history.ReadEvents("test", key, "session", now.AddDays(-1));
+        Check(events.Any(e => e.Kind == "Sampling gap") && events.Any(e => e.Kind == "Window changed"), "Recorded gap and unconfirmed window events");
+        var consistent = Enumerable.Range(0, 37).Select(i => new UsagePoint(now.AddMinutes(-180 + i * 5), .1 + i * .01, now.AddHours(2), "consistent")).ToArray();
+        var confidence = UsageForecast.Calculate(consistent, SnapshotStatus.Ok, now);
+        Check(confidence.Confidence == "Consistent pace" && confidence.Coverage == 1 && confidence.Samples == 37, "Confidence backed by coverage and normalized rates");
+        Check(confidence.LowRate <= confidence.PercentPerHour / 100 && confidence.HighRate >= confidence.PercentPerHour / 100, "Scenario range includes endpoint estimate");
+        var variable = consistent.Select((p, i) => p with { Used = i < 30 ? .1 : .1 + (i - 29) * .08 }).ToArray();
+        Check(UsageForecast.Calculate(variable, SnapshotStatus.Ok, now).Confidence == "Highly variable usage", "Variable activity has explicit label");
+        Check(UsageForecast.Calculate(consistent.TakeLast(4).ToArray(), SnapshotStatus.Ok, now).Confidence == "Limited history", "Short sample does not imply high confidence");
+        var sessions = UsageAnalytics.Sessions(points, events);
+        Check(sessions.Count > 1 && sessions.All(s => s.Consumption >= 0), "Sessions split on missing time and exclude negative reset deltas");
+        Check(UsageAnalytics.Patterns(consistent, false).All(p => p.Pace is null), "Sparse patterns remain unknown rather than zero");
+        Check(UsageAnalytics.Insights(consistent, now).Count > 0, "Well-covered hour comparison links to its interval");
         Console.WriteLine("PASS: history persistence, identity separation, deduplication, retention, reset/gap segmentation, pace and countdown boundaries.");
 
         using var signer = new ECDsaCng(256);

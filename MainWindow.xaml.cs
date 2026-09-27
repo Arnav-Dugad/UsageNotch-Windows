@@ -149,6 +149,7 @@ public partial class MainWindow : Window
     private void Coordinator_Refreshed()
     {
         RefreshRelativeTimes();
+        if (DetailPopup.IsOpen && HoverInspector.IsExpanded) LoadInspector();
         // Saved/unknown states can change label height after the initial loading layout.
         Dock(animate: true);
     }
@@ -544,7 +545,7 @@ public partial class MainWindow : Window
     private void Cell_MouseEnter(object sender, MouseEventArgs e)
     {
         Untuck();
-        if (_dragging || _menuOpen || _settingsOpen) return;
+        if (_dragging || _menuOpen) return;
         _insideCell = true;
         _closePopupTimer.Stop();
         if (sender is not Border border) return;
@@ -610,6 +611,7 @@ public partial class MainWindow : Window
         DetailPopup.DataContext = viewModel;
         DetailPopup.PlacementTarget = target;
         DetailPopup.IsOpen = true;
+        if (HoverInspector.IsExpanded) LoadInspector();
 
         Dispatcher.BeginInvoke(() =>
         {
@@ -1054,6 +1056,7 @@ public partial class MainWindow : Window
     {
         if (_settingsWindow is not null)
         {
+            if (_settingsWindow.WindowState == WindowState.Minimized) _settingsWindow.WindowState = WindowState.Normal;
             _settingsWindow.Activate();
             return;
         }
@@ -1063,7 +1066,7 @@ public partial class MainWindow : Window
 
         var snapshot = _settings.Clone();
         _settings.LiveEdit = true;
-        var window = new SettingsWindow(_settings, _coordinator) { Owner = this };
+        var window = new SettingsWindow(_settings, _coordinator);
         _settingsWindow = window;
         window.SettingsChanged += Settings_Changed;
         window.Closed += (_, _) =>
@@ -1091,6 +1094,30 @@ public partial class MainWindow : Window
             if (_settings.AutoHide) ScheduleTuck(immediate: false);
         };
         window.Show();
+    }
+
+    private void Inspector_Expanded(object sender, RoutedEventArgs e) => LoadInspector();
+    private async void LoadInspector()
+    {
+        if (DetailPopup.DataContext is not ProviderViewModel vm || vm.PrimaryWindow is not { } window) return;
+        var snapshot = vm.Snapshot; var now = DateTimeOffset.UtcNow;
+        var points = await Task.Run(() => { lock (_coordinator.History) return _coordinator.History.Read(vm.Id, _coordinator.History.AccountKey(snapshot), window.Id, now.AddHours(-3)); });
+        await Dispatcher.InvokeAsync(() =>
+        {
+        if (DetailPopup.DataContext != vm || !DetailPopup.IsOpen) return;
+        var forecast = UsageForecast.Calculate(points, vm.Status, now);
+        HoverChart.Points = points; HoverChart.Start = now.AddHours(-3); HoverChart.End = now; HoverChart.InvalidateVisual();
+        HoverForecast.Text = window.Label + " · pace estimate\n" + forecast.Summary;
+        HoverConfidence.Text = $"{forecast.Confidence} · {forecast.Samples} readings · {forecast.Coverage:P0} coverage";
+        HoverConfidence.ToolTip = forecast.Explanation;
+        });
+    }
+    private void ExploreHistory_Click(object sender, RoutedEventArgs e)
+    {
+        if (DetailPopup.DataContext is not ProviderViewModel vm) return;
+        var cell = DetailPopup.PlacementTarget as FrameworkElement;
+        var origin = cell?.PointToScreen(new Point(cell.ActualWidth / 2, cell.ActualHeight / 2));
+        OpenSettings(); _settingsWindow?.ShowProvider(vm.Id, origin);
     }
 
     private void CloseDetailImmediately()

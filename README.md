@@ -2,9 +2,9 @@
 
 A native Windows 11 edge-pinned usage monitor inspired by the open-source **Codenotch** macOS design.
 
-**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.0.1**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
+**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.1.0**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
 
-2.0 adds a shared Stats & Settings window, local usage-history charts, second-by-second reset countdowns, clearly labelled usage-pace estimates, and verified automatic updates from GitHub Releases. All existing dock, provider, alert and appearance settings remain available. Download the latest app from [GitHub Releases](https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest).
+2.1 adds a resizable Claude/Codex comparison workspace, unlimited local history, interactive charts, explainable pace estimates, observation sessions and personal patterns. The dock expands while Stats is open and shows exact local reset clocks. Verified automatic updates show download progress and installation stages. Download the latest app from [GitHub Releases](https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest).
 
 Account names use Claude Code's local profile or Codex's documented [`account/read` response](https://learn.chatgpt.com/docs/app-server); the app does not decode Codex auth files. Multiple simultaneous accounts are not enabled because isolated provider login lifecycles have not been verified.
 
@@ -26,16 +26,22 @@ Account names use Claude Code's local profile or Codex's documented [`account/re
 - Gemini refreshes use OAuth configuration read from the installed official Gemini CLI, without embedding client values in this repository. Bundled and unbundled npm installs are supported; unfamiliar layouts fail with installation guidance. [Upstream OAuth implementation](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/code_assist/oauth2.ts).
 - API Admin keys are encrypted by Windows DPAPI (`CurrentUser`) before being written to `%LOCALAPPDATA%\UsageNotch\settings.json`.
 - Provider failures show as unavailable/error; the app does not invent percentages.
-- History stores up to 30 days of successful observations locally, separated by provider, account fingerprint and limit window. Names and credentials are excluded. Providers without account identity start a new history series on each launch.
+- History has no automatic expiry, separated by provider, account fingerprint and limit window. Names and credentials are excluded. Providers without account identity start a new history series on each launch. Existing readings are preserved; readings previously deleted by older releases cannot be recovered.
 - The updater checks an embedded ECDSA P-256 public key and the signed executable size/SHA-256 hash, restricts download hosts to GitHub, rejects older versions, and keeps the previous executable. Release signatures are separate from Windows Authenticode; the portable EXE is not Authenticode signed.
 
 ## Stats and usage-pace forecasts
 
-Open **Stats & Settings** from the dock or tray. Choose a provider, limit window and 24-hour, 7-day or 30-day chart. Charts always show percentage **used**, independently of the dock's used/remaining preference. Gaps and resets are not joined; history begins when this version runs, with no historical backfill.
+Open **Stats & Settings** from the dock or tray. Claude and Codex appear together with separate window labels and percentages. Choose a limit within either card and 24-hour, 7-day, 30-day or all-history range. Charts always show percentage **used**, independently of the dock's used/remaining preference. Gaps and resets are not joined. Drag a chart or its overview to inspect an interval, hover for exact observations, use Ctrl+wheel to zoom, or choose Reset period. All-history navigation samples first/last/min/max readings in SQLite; raw readings remain intact. Select at most 32 days to load exact readings.
+
+Dashed projections and scenario shading begin after the last observation. The shading spans the 10th–90th percentile observed interval rates, not a probability or confidence interval. Confidence disclosures show sample counts, coverage of the three-hour lookback and normalized rate variability. **Limited history** means less than 90 minutes or six rate samples; otherwise a coefficient of variation above 0.75 is **Highly variable usage**, with lower variability labelled **Consistent pace**. These are descriptive quality labels, not calibrated accuracy guarantees.
+
+Observed work sessions are consecutive observation spans separated by gaps over 20 minutes, not keyboard/activity tracking. Their consumption sums positive continuous-period deltas; peak pace is an observed interval rate and can reflect provider rounding. Resets and missing intervals are excluded. Personal patterns use the last 28 days in local time and show coverage hours/date counts. They need at least seven observed dates, with at least three dates per hour or two per weekday and one covered hour per cell. Insufficient coverage stays unknown. Insights link to their chart intervals. Events distinguish confirmed resets from unconfirmed window changes and unavailable readings from provider-wide outages.
+
+The window supports resizing, minimize/maximize, F11 full screen and remembered dimensions. A provider logo connects the hover inspector to its dashboard card; reduced-motion preferences skip this animation. Windows 11 build 22621+ uses the supported system backdrop API: Mica for the workspace, transient Acrylic for the updater window, and solid fallbacks. The layered WPF dock popup intentionally retains its solid fallback. [Microsoft backdrop roles](https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/ne-dwmapi-dwm_systembackdrop_type).
 
 Forecasts are estimates, never provider guarantees. They need at least three live observations spanning ten minutes within one limit period, with no gap over twenty minutes and a latest observation no older than fifteen minutes. The rate is the observed increase in percentage points per hour over up to three hours. A constant-pace extrapolation estimates usage at the reported reset, or when the limit would be reached first. Flat readings say **No increase observed**. Unknown reset times, stale/error readings and insufficient history suppress the forecast. Usage decreases, changed reset timestamps and long gaps restart learning. Rolling limits, account changes not reported by a provider, and changes in future activity can invalidate estimates.
 
-Countdowns show days and `HH:mm:ss`, alongside the exact local timestamp and UTC offset in Stats. An expired timestamp says **awaiting provider confirmation** until a fresh reading confirms the reset.
+Countdowns show days and `HH:mm:ss`, alongside exact local timestamps and UTC offsets in Stats and the dock's expanded cards. Compact dock labels show the first two reported reset clocks. An expired timestamp says **awaiting provider confirmation** until a fresh reading confirms the reset.
 
 ## Automatic updates and publishing
 

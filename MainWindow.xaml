@@ -75,7 +75,7 @@
                     <ItemsControl.ItemTemplate><DataTemplate>
                         <Border Style="{StaticResource ProviderCellStyle}" MouseEnter="Cell_MouseEnter" MouseLeave="Cell_MouseLeave"
                                 MouseLeftButtonUp="Cell_MouseLeftButtonUp">
-                            <StackPanel HorizontalAlignment="Center">
+                            <StackPanel HorizontalAlignment="Stretch">
                                 <Grid x:Name="RingHost" Width="{Binding RingSize}" Height="{Binding RingSize}">
                                     <controls:ProgressRing
                                         Value="{Binding RingFraction, TargetNullValue=0}"
@@ -100,6 +100,8 @@
                                 <TextBlock Text="{Binding SecondaryLine}" Foreground="{DynamicResource DockFaint}" FontFamily="{StaticResource UIFont}"
                                            FontSize="10" HorizontalAlignment="Center" Margin="0,1,0,0"
                                            Visibility="{Binding SecondaryLine, Converter={StaticResource Presence}}"/>
+                                <TextBlock Text="{Binding DockResetLines}" ToolTip="{Binding DockResetTooltip}" Foreground="{DynamicResource DockFaint}"
+                                           FontSize="8" TextAlignment="Center" Margin="0,3,0,0" TextWrapping="Wrap" Visibility="{Binding DockResetLines, Converter={StaticResource Presence}}"/>
                                 <Border Background="{DynamicResource DockRaised}" CornerRadius="6" Padding="5,1" Margin="0,4,0,0" HorizontalAlignment="Center"
                                         Visibility="{Binding IsStale, Converter={StaticResource BoolVisibility}}">
                                     <TextBlock Text="saved" Foreground="{DynamicResource DockFaint}" FontFamily="{StaticResource UIFont}" FontSize="8.5"/>
@@ -188,11 +190,20 @@
                                                     </MultiBinding></TextBlock.Text>
                                                 </TextBlock>
                                             </Grid>
+                                            <TextBlock Text="{Binding ResetLocalText}" Foreground="{DynamicResource DockFaint}" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,0"/>
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate></ItemsControl.ItemTemplate>
                         </ItemsControl>
 
+                        <Expander x:Name="HoverInspector" Header="Usage inspector" Foreground="{DynamicResource DockText}" Margin="0,4,0,10" Expanded="Inspector_Expanded">
+                            <StackPanel>
+                                <controls:UsageChart x:Name="HoverChart" Height="132"/>
+                                <TextBlock x:Name="HoverForecast" Foreground="{DynamicResource DockText}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,6"/>
+                                <TextBlock x:Name="HoverConfidence" Foreground="{DynamicResource DockFaint}" FontSize="10" TextWrapping="Wrap"/>
+                                <Button Content="Explore history →" Style="{StaticResource CardButton}" Click="ExploreHistory_Click" Margin="0,9,0,0"/>
+                            </StackPanel>
+                        </Expander>
                         <Border Height="1" Background="{DynamicResource DockHairline}" Margin="0,4,0,10"/>
                         <WrapPanel>
                             <Button Content="Refresh" Style="{StaticResource CardButton}" Margin="0,0,7,0" Click="Refresh_Click"/>

@@ -25,11 +25,11 @@ public partial class App : System.Windows.Application
     public AlertService? Alerts => _coordinator?.Alerts;
     public UpdateService Updates { get; } = new();
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         if (IsReviewSession) return;
-        if (UpdateService.ApplyFromArguments(e.Args)) { Shutdown(); return; }
+        if (await UpdateService.ApplyFromArgumentsAsync(e.Args)) { Shutdown(); return; }
         var settings = SettingsStore.Load();
         _settings = settings;
 
