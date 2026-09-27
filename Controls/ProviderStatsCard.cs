@@ -20,6 +20,8 @@ public sealed class ProviderStatsCard : Border
     private string? _windowId;
     private LimitWindow? Window => Provider?.Windows.FirstOrDefault(w => w.Id == _windowId);
     private readonly StackPanel _body = new();
+    private readonly StackPanel _analysis = new();
+    private readonly Expander _explore = new() { Header = "Explore history", Foreground = Ink, Margin = new Thickness(0, 14, 0, 0), HorizontalContentAlignment = System.Windows.HorizontalAlignment.Stretch };
     private readonly WrapPanel _windows = new();
     private readonly TextBlock _status = Text("", 11), _usage = Text("", 28), _clock = Text("", 13), _date = Text("", 11), _forecast = Text("", 15), _assumptions = Text("", 11), _coverage = Text("", 11), _notice = Text("", 11), _detail = Text("", 11);
     private readonly Expander _confidence = new() { Margin = new Thickness(0, 8, 0, 8), Foreground = Ink };
@@ -43,40 +45,47 @@ public sealed class ProviderStatsCard : Border
     }
     private void Section(string title, UIElement content)
     {
-        _body.Children.Add(new Expander { Header = title, Content = content, Foreground = Ink, Margin = new Thickness(0, 9, 0, 2), HorizontalContentAlignment = System.Windows.HorizontalAlignment.Stretch });
+        _analysis.Children.Add(new Expander { Header = title, Content = content, Foreground = Ink, Margin = new Thickness(0, 9, 0, 2), HorizontalContentAlignment = System.Windows.HorizontalAlignment.Stretch });
     }
     public ProviderStatsCard(UsageCoordinator coordinator, string id)
     {
         _coordinator = coordinator; ProviderId = id;
         _chart.Start = _overview.Start = DateTimeOffset.UtcNow.AddDays(-1);
         _chart.End = _overview.End = DateTimeOffset.UtcNow;
+        _chart.TimeSettings = _overview.TimeSettings = coordinator.Settings;
         Background = new SolidColorBrush(Color.FromRgb(21, 26, 35)); BorderBrush = new SolidColorBrush(Color.FromRgb(43, 51, 67));
         BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(14); Padding = new Thickness(18); Margin = new Thickness(0, 0, 10, 12); Child = _body;
         Logo = new ProviderLogo { Provider = id, Colored = true, Width = 28, Height = 28, Margin = new Thickness(0, 0, 10, 0) };
         var heading = new StackPanel { Orientation = Orientation.Horizontal }; heading.Children.Add(Logo);
         heading.Children.Add(Text(Provider?.DisplayName ?? (id == "claude" ? "Claude" : "Codex"), 20)); _body.Children.Add(heading);
-        _body.Children.Add(_status); _body.Children.Add(_windows); _body.Children.Add(_usage); _body.Children.Add(_clock); _body.Children.Add(_date);
+        _usage.FontSize = 34; _usage.FontWeight = FontWeights.SemiBold; _usage.Margin = new Thickness(0, 14, 0, 3);
+        _clock.Foreground = _status.Foreground = _coverage.Foreground = _notice.Foreground = new SolidColorBrush(Color.FromRgb(153, 165, 185));
+        _clock.FontSize = 11; _date.FontSize = 13; _forecast.FontSize = 13; _forecast.Margin = new Thickness(0, 13, 0, 5);
+        _body.Children.Add(_status); _body.Children.Add(_windows); _body.Children.Add(_usage); _body.Children.Add(_date); _body.Children.Add(_clock);
+        _body.Children.Add(_forecast);
+        var reasoning = new StackPanel(); reasoning.Children.Add(_coverage); reasoning.Children.Add(_assumptions);
+        _confidence.Content = reasoning; _confidence.FontSize = 11; _body.Children.Add(_confidence);
         var ranges = new WrapPanel();
         foreach (var (label, days) in new[] { ("24h", 1), ("7d", 7), ("30d", 30), ("All history", 0) })
             ranges.Children.Add(Action(label, () => { _days = days; _selectedStart = _selectedEnd = null; Refresh(); }));
-        ranges.Children.Add(Action("Reset period", () =>
+        _analysis.Children.Add(Action("Zoom to current reset period", () =>
         {
             if (_recent.LastOrDefault() is not { } last) return;
             var period = _recent.Where(p => p.Period == last.Period).ToArray();
             Select(period[0].At, last.Reset ?? DateTimeOffset.UtcNow);
         }));
         _body.Children.Add(ranges); _body.Children.Add(_chart);
-        _body.Children.Add(Text("Used % · local time   |   Mint: observed   ·   Dashed: estimate\nShading: pace scenarios, not probability. Hover readings; drag to zoom; Ctrl+wheel adjusts zoom.", 10));
-        _body.Children.Add(_overview); _body.Children.Add(Text("Overview · drag to choose an interval. All-history view uses sampled extrema; raw readings are retained.", 10));
-        _body.Children.Add(_forecast); _confidence.Content = _assumptions; _body.Children.Add(_confidence); _body.Children.Add(_coverage);
-        _body.Children.Add(_detail); _body.Children.Add(_insights);
-        Section("Observed work sessions", _sessions); Section("Personal patterns · last 28 days", _patterns); Section("Events in this interval", _events);
-        _body.Children.Add(_notice);
+        var legend = new WrapPanel(); var observed = Text("━  Recorded usage", 10); observed.Foreground = new SolidColorBrush(Color.FromRgb(117, 224, 191)); observed.Margin = new Thickness(0, 0, 16, 0);
+        var projected = Text("┄  Estimate", 10); projected.Foreground = new SolidColorBrush(Color.FromRgb(190, 164, 240)); legend.Children.Add(observed); legend.Children.Add(projected); _body.Children.Add(legend);
+        _analysis.Children.Add(_overview); _analysis.Children.Add(Text("Drag either chart to zoom into a period. Hover for exact readings; Ctrl+wheel adjusts zoom. Shading shows possible outcomes at different observed paces, not probabilities. Blank time means missing readings.", 11));
+        _body.Children.Add(_detail); _analysis.Children.Add(_insights);
+        Section("Work sessions", _sessions); Section("Busy hours & days", _patterns); Section("Resets & missing readings", _events);
+        _analysis.Children.Add(_notice); _explore.Content = _analysis; _explore.IsExpanded = coordinator.Settings.DetailedStats; _body.Children.Add(_explore);
         _chart.IntervalSelected += Select; _overview.IntervalSelected += Select;
-        _chart.EventClicked += e => _detail.Text = $"{e.At.ToLocalTime():MMM d HH:mm:ss} · {e.Kind}\n{e.Explanation}";
+        _chart.EventClicked += e => _detail.Text = $"{TimeDisplay.Stamp(e.At, coordinator.Settings)} · {e.Kind}\n{e.Explanation}";
         _timer.Tick += (_, _) => Clock();
-        SizeChanged += (_, _) => _chart.Height = Math.Clamp(ActualWidth * .44, 180, 300);
-        Loaded += (_, _) => { _timer.Start(); Refresh(); };
+        SizeChanged += (_, _) => _chart.Height = Math.Clamp(ActualWidth * .32, 150, 240);
+        Loaded += (_, _) => { _explore.IsExpanded = coordinator.Settings.DetailedStats; _timer.Start(); Refresh(); };
         Unloaded += (_, _) => { _timer.Stop(); _generation++; };
     }
     private void Select(DateTimeOffset start, DateTimeOffset end)
@@ -110,7 +119,8 @@ public sealed class ProviderStatsCard : Border
             _windows.Children.Add(button);
         }
         var window = Window; if (window is null) { _usage.Text = "Waiting for provider limits"; return; }
-        _usage.Text = window.UsedFraction is { } used ? $"{used * 100:0.0}% used · {window.Label}" : window.Label + " · no reading";
+        _usage.Text = window.UsedFraction is { } used ? $"{used * 100:0.#}% used" : "No reading yet";
+        _usage.ToolTip = window.Label + " · percentages belong only to this limit";
         if (_loadedWindow != window.Id) { _loadedWindow = window.Id; _recent = []; _chart.Forecast = null; }
         var now = DateTimeOffset.UtcNow; var days = _days;
         var start = _selectedStart ?? now.AddDays(-(days == 0 ? 30 : days)); var end = _selectedEnd ?? now;
@@ -151,7 +161,7 @@ public sealed class ProviderStatsCard : Border
         foreach (var s in UsageAnalytics.Sessions(_recent, result.events))
         {
             var b = Action("", () => Select(s.Start, s.End));
-            b.Content = Text($"{s.Start.ToLocalTime():MMM d HH:mm}–{s.End.ToLocalTime():HH:mm}\n{ s.Consumption:0.00} percentage points observed · peak {s.PeakPace:0.0} pp/h\n{s.Resets} confirmed resets · {s.Missing} excluded boundaries/gaps", 11); _sessions.Children.Add(b);
+            b.Content = Text($"{TimeDisplay.Stamp(s.Start, _coordinator.Settings)} – {TimeDisplay.Clock(s.End, _coordinator.Settings.Use24HourTime)}\n{ s.Consumption:0.00} percentage points recorded · peak {s.PeakPace:0.0} points/hour\n{s.Resets} confirmed resets · {s.Missing} excluded boundaries/gaps", 11); _sessions.Children.Add(b);
         }
         if (_recent.Count < 2) _sessions.Children.Add(Text("Waiting for consecutive observations.", 11));
         _patterns.Children.Clear();
@@ -160,18 +170,20 @@ public sealed class ProviderStatsCard : Border
         {
             var cells = UsageAnalytics.Patterns(_recent, group);
             var busy = cells.Where(c => c.Pace is not null).OrderByDescending(c => c.Pace).Take(3).ToArray();
-            if (busy.Length > 0) _patterns.Children.Add(Text("Busiest observed " + (group ? "days: " : "hours: ") + string.Join(", ", busy.Select(c => c.Label)), 12));
+            string PatternLabel(PatternCell c) => !group && !_coordinator.Settings.Use24HourTime && int.TryParse(c.Label[..2], out var hour) ? $"{(hour % 12 == 0 ? 12 : hour % 12)} {(hour < 12 ? "AM" : "PM")}" : c.Label;
+            if (busy.Length > 0) _patterns.Children.Add(Text("Busiest observed " + (group ? "days: " : "hours: ") + string.Join(", ", busy.Select(PatternLabel)), 12));
             var panel = new WrapPanel();
             foreach (var c in cells)
             {
-                var label = Text($"{c.Label}  {(c.Pace is { } p ? p.ToString("0.0") + " pp/h" : "—")}\n{c.CoveredHours:0.0}h · {c.Days} date(s)", 10);
+                var hourLabel = PatternLabel(c);
+                var label = Text($"{hourLabel}  {(c.Pace is { } p ? p.ToString("0.0") + " pts/h" : "—")}\n{c.CoveredHours:0.0}h · {c.Days} date(s)", 10);
                 label.Width = 107; label.Margin = new Thickness(0, 4, 5, 4); panel.Children.Add(label);
             }
             _patterns.Children.Add(panel);
         }
         _events.Children.Clear();
         foreach (var evt in _chart.Events.TakeLast(100).Reverse())
-        { var b = Action("", () => { _detail.Text = evt.Explanation; Select(evt.At.AddMinutes(-30), evt.At.AddMinutes(30)); }); b.Content = Text($"{evt.At.ToLocalTime():MMM d HH:mm} · {evt.Kind}", 11); _events.Children.Add(b); }
+        { var b = Action("", () => { _detail.Text = evt.Explanation; Select(evt.At.AddMinutes(-30), evt.At.AddMinutes(30)); }); b.Content = Text($"{TimeDisplay.Stamp(evt.At, _coordinator.Settings)} · {evt.Kind}", 11); _events.Children.Add(b); }
         if (_chart.Events.Count == 0) _events.Children.Add(Text("No recorded events in this interval.", 11));
         _notice.Text = result.error ?? (result.broad ? "Overview sampled for display. Select ≤32 days to inspect exact readings. Raw history has no automatic expiry." : $"{result.points.Count:N0} exact readings in view · no automatic history expiry.");
         Clock();
@@ -181,9 +193,11 @@ public sealed class ProviderStatsCard : Border
     {
         var window = Window; var now = DateTimeOffset.UtcNow;
         _clock.Text = ResetClock.Describe(window?.ResetsAt, now);
-        _date.Text = window?.ResetsAt is { } reset ? $"Resets {reset.ToLocalTime():ddd, MMM d yyyy · HH:mm:ss zzz} (local)" : "Exact reset not reported";
-        var forecast = UsageForecast.Calculate(_recent, Provider?.Status ?? SnapshotStatus.Error, now);
-        _forecast.Text = "Current pace estimate · " + forecast.Summary;
+        _date.Text = TimeDisplay.Reset(window?.ResetsAt, _coordinator.Settings);
+        _date.ToolTip = window?.ResetsAt is { } reset ? TimeDisplay.Stamp(reset, _coordinator.Settings, true) : null;
+        var forecast = UsageForecast.Calculate(_recent, Provider?.Status ?? SnapshotStatus.Error, now, _coordinator.Settings);
+        _forecast.Text = forecast.PercentPerHour is not null ? forecast.Summary + "\nIf your recent pace continues." : forecast.Summary;
+        _forecast.ToolTip = "Usage-pace forecast · estimate, not a provider guarantee";
         _confidence.Header = forecast.Confidence + " · assumptions"; _assumptions.Text = forecast.Explanation;
         _coverage.Text = $"{forecast.Samples} forecast readings · {forecast.Coverage:P0} of the 3-hour lookback covered";
         _chart.Forecast = _chart.Points.LastOrDefault()?.At == _recent.LastOrDefault()?.At ? forecast : null;

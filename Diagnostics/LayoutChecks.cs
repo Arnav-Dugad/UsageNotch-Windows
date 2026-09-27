@@ -29,7 +29,8 @@ internal static class LayoutChecks
         {
             var settings = new AppSettings { ReviewSession = true, CompactMode = compact, UiScale = scale, ProviderSpacing = spacing,
                 DisplayMode = mode, ShowPercentages = showText, ShowProviderNames = showText, FloatingDock = floating, Edge = edge,
-                ReducedMotion = true, CursorEnabled = false, ShowRemaining = remaining, SleekMode = sleek };
+                ReducedMotion = true, CursorEnabled = false, ShowRemaining = remaining, SleekMode = sleek,
+                ShowDockResetTimes = showText, ShowWindowLabel = showText, ClaudeDockLabel = "Personal workspace", Use24HourTime = sleek, ShowClockSeconds = !sleek };
             using var coordinator = new UsageCoordinator(settings);
             coordinator.Items[0].Snapshot = new("claude", "Claude", "", Fidelity.Manual, SnapshotStatus.Stale,
                 [new("five_hour", "5-hour window", remaining ? 0 : .73, DateTimeOffset.UtcNow.AddHours(3)), new("seven_day", "Weekly window", remaining ? 0 : .07, DateTimeOffset.UtcNow.AddDays(3))], "Saved reading");

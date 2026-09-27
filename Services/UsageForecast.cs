@@ -8,7 +8,7 @@ public sealed record PaceForecast(string Summary, string Explanation, double? Pe
 
 public static class UsageForecast
 {
-    public static PaceForecast Calculate(IReadOnlyList<UsagePoint> points, SnapshotStatus status, DateTimeOffset now)
+    public static PaceForecast Calculate(IReadOnlyList<UsagePoint> points, SnapshotStatus status, DateTimeOffset now, AppSettings? settings = null)
     {
         if (status != SnapshotStatus.Ok || points.Count == 0 || now - points[^1].At > TimeSpan.FromMinutes(15) || points[^1].At > now)
             return new("Forecast unavailable", "A fresh, successful provider reading is required. No estimate is made across a reset, account change, or sampling gap.");
@@ -49,7 +49,7 @@ public static class UsageForecast
             if (hours < (reset - last.At).TotalHours)
             {
                 var eta = last.At.AddHours(hours);
-                summary = eta <= now ? "Estimated limit reached by now" : $"Estimated limit: {eta.ToLocalTime():ddd HH:mm}";
+                summary = eta <= now ? "Estimated limit reached by now" : $"Estimated limit: {TimeDisplay.Stamp(eta, settings)}";
             }
         }
         return new(summary, explanation, rate * 100, projected, confidence, sample.Length, coverage, variability, low, high);

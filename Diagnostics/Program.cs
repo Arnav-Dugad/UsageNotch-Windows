@@ -145,6 +145,11 @@ internal static class Program
 
         ((System.Windows.Controls.TextBox)window.FindName("OpenAiBudget")!).Text = "25";
         if (settings.OpenAiMonthlyBudgetUsd is not 25) throw new Exception("A text field did not reach the dock live.");
+        ((System.Windows.Controls.CheckBox)window.FindName("DockResetBox")!).IsChecked = true;
+        ((System.Windows.Controls.CheckBox)window.FindName("ExpandedResetBox")!).IsChecked = false;
+        ((System.Windows.Controls.RadioButton)window.FindName("Clock24")!).IsChecked = true;
+        ((System.Windows.Controls.TextBox)window.FindName("ClaudeLabelField")!).Text = "Personal";
+        if (!settings.ShowDockResetTimes || settings.ShowExpandedResetTimes || !settings.Use24HourTime || settings.ClaudeDockLabel != "Personal") throw new Exception("New display controls were not applied live.");
 
         settings.FloatingDock = true;
         ((System.Windows.Controls.RadioButton)window.FindName("EdgeTop")!).IsChecked = true;
@@ -163,7 +168,7 @@ internal static class Program
         var defaults = new AppSettings();
         if (settings.CompactMode || settings.DisplayMode != defaults.DisplayMode
             || Math.Abs(settings.ProviderSpacing - defaults.ProviderSpacing) > 0.01
-            || settings.OpenAiMonthlyBudgetUsd is not null)
+            || settings.OpenAiMonthlyBudgetUsd is not null || settings.ShowDockResetTimes || !settings.ShowExpandedResetTimes || settings.Use24HourTime || settings.ClaudeDockLabel.Length > 0)
             throw new Exception("Cancelling did not restore the snapshot.");
         if (!settings.ReviewSession) throw new Exception("Snapshot restore must not clear the review flag.");
 
@@ -410,17 +415,27 @@ internal static class Program
         {
             var at = previewNow.AddMinutes(-120 + i * 5);
             var sample = new ProviderSnapshot("claude", "Claude · sample data", "", Fidelity.Manual, SnapshotStatus.Ok,
-                [new("five_hour", "5-hour session", .15 + i * .02, previewReset)], FetchedAt: at, AccountName: "Sample");
+                [new("five_hour", "5-hour session", .15 + i * .02, previewReset), new("seven_day", "Weekly window", .18 + i * .001, previewNow.AddDays(3))], FetchedAt: at, AccountName: "Sample");
             previewHistory.Record(sample, at);
             previewCoordinator.Items[0].Snapshot = sample;
+            var codex = new ProviderSnapshot("codex", "Codex · sample data", "", Fidelity.Manual, SnapshotStatus.Ok,
+                [new("default-primary", "5-hour window", .1 + i * .009, previewNow.AddHours(3)), new("default-secondary", "Weekly window", .35, previewNow.AddDays(4))], FetchedAt: at, AccountName: "Sample");
+            previewHistory.Record(codex, at); previewCoordinator.Items.First(p => p.Id == "codex").Snapshot = codex;
         }
         var settingsWindow = new SettingsWindow(previewSettings, previewCoordinator);
         var settingsRoot = (FrameworkElement)settingsWindow.Content;
         settingsRoot.Opacity = 1;
         settingsRoot.RenderTransform = Transform.Identity;
-        SaveImage(Render(settingsRoot, 940, 880), Path.Combine(folder, "Stats.png"));
+        Render(settingsRoot, 1260, 880);
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        var wait = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+        wait.Tick += (_, _) => { wait.Stop(); frame.Continue = false; }; wait.Start(); System.Windows.Threading.Dispatcher.PushFrame(frame);
+        SaveImage(Render(settingsRoot, 1260, 880), Path.Combine(folder, "Stats.png"));
+        SaveImage(Render(settingsRoot, 820, 880), Path.Combine(folder, "StatsCompact.png"));
         ((TabControl)settingsWindow.FindName("SettingsTabs")).SelectedIndex = 1;
-        SaveImage(Render(settingsRoot, 940, 880), Path.Combine(folder, "Settings.png"));
+        SaveImage(Render(settingsRoot, 1260, 880), Path.Combine(folder, "Settings.png"));
+        ((TabControl)settingsWindow.FindName("SettingsTabs")).SelectedIndex = 7;
+        SaveImage(Render(settingsRoot, 1260, 880), Path.Combine(folder, "TimeSettings.png"));
         ((TabControl)settingsWindow.FindName("SettingsTabs")).SelectedIndex = 4;
         SaveImage(Render(settingsRoot, 940, 880), Path.Combine(folder, "AlertSettings.png"));
         var alert = new AlertWindow(new AlertNotice("Claude · getting close", "Current session · 82% used · 18% left · resets in 47 min", false, "claude", .82, IsPreview: true), new AppSettings { ReviewSession = true, ReducedMotion = true });

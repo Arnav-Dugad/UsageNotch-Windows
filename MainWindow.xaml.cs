@@ -1105,7 +1105,8 @@ public partial class MainWindow : Window
         await Dispatcher.InvokeAsync(() =>
         {
         if (DetailPopup.DataContext != vm || !DetailPopup.IsOpen) return;
-        var forecast = UsageForecast.Calculate(points, vm.Status, now);
+        var forecast = UsageForecast.Calculate(points, vm.Status, now, _settings);
+        HoverChart.TimeSettings = _settings;
         HoverChart.Points = points; HoverChart.Start = now.AddHours(-3); HoverChart.End = now; HoverChart.InvalidateVisual();
         HoverForecast.Text = window.Label + " · pace estimate\n" + forecast.Summary;
         HoverConfidence.Text = $"{forecast.Confidence} · {forecast.Samples} readings · {forecast.Coverage:P0} coverage";

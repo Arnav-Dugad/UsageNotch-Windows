@@ -3,10 +3,10 @@
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="4,0,18,12">
   <StackPanel>
-   <TextBlock Text="Usage workspace" Foreground="#F4F6FC" FontSize="25" FontWeight="SemiBold" Margin="0,6,0,7"/>
-   <TextBlock Text="Independent limits. Observed history. Explainable estimates." Foreground="#A6AFBF" TextWrapping="Wrap" Margin="0,0,0,15"/>
+   <TextBlock Text="Your usage" Foreground="#F4F6FC" FontSize="25" FontWeight="SemiBold" Margin="0,6,0,7"/>
+   <TextBlock Text="See what you’ve used, when it resets, and how your pace is changing." Foreground="#A6AFBF" TextWrapping="Wrap" Margin="0,0,0,15"/>
    <WrapPanel x:Name="Cards" SizeChanged="Cards_SizeChanged"/>
-   <TextBlock Text="History stays on this PC with no automatic expiry. Only running-app observations are recorded; missing time is unknown. Accounts stay separate. Providers without a reported identity start a separate history each launch." Foreground="#A6AFBF" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,8"/>
+   <TextBlock Text="Private, local history · kept without automatic expiry. Each provider’s limits stay separate." ToolTip="Only running-app observations are recorded. Missing readings never mean inactivity. Accounts stay separate; providers without a reported identity start a separate history each launch." Foreground="#A6AFBF" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,8"/>
   </StackPanel>
  </ScrollViewer>
 </UserControl>

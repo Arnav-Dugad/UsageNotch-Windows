@@ -265,17 +265,20 @@
                         <controls:StatsDashboard x:Name="StatsView"/>
                     </TabItem>
 
-                    <TabItem Header="Settings · Display" Style="{StaticResource NavTab}">
+                    <TabItem Header="Dock" Style="{StaticResource NavTab}">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6,0,22,4"><StackPanel>
-                            <TextBlock Text="AT A GLANCE" Style="{StaticResource GroupLabel}"/>
+                            <TextBlock Text="Make it yours" FontSize="24" FontWeight="SemiBold" Margin="0,6,0,5"/>
+                            <TextBlock Text="Choose the information you want at a glance." Style="{StaticResource SecondaryText}" Margin="0,0,0,14"/>
+                            <controls:SettingsPreview x:Name="DockTextPreview" Scene="Text" Margin="0,0,0,16"/>
+                            <Expander Header="Ring display" Foreground="#E5EAF4" Margin="0,0,0,14"><StackPanel>
                             <Border Style="{StaticResource Card}"><StackPanel>
                                 <TextBlock Text="What each ring shows" Style="{StaticResource SectionTitle}"/>
-                                <TextBlock Text="Classic mirrors the reference design. Orbit layers two independent limits around one logo." Style="{StaticResource SecondaryText}" Margin="0,5,0,12"/>
+                                <TextBlock Text="Show one limit, or keep session and weekly limits in separate rings." Style="{StaticResource SecondaryText}" Margin="0,5,0,12"/>
                                 <Border Background="#7A000000" CornerRadius="12" Padding="4" BorderBrush="#18FFFFFF" BorderThickness="1">
                                     <UniformGrid Columns="2" Rows="2">
-                                        <RadioButton x:Name="ModeSession" Content="Classic · 5-hour" GroupName="Mode" Style="{StaticResource Segment}" Checked="Preview_Changed"/>
-                                        <RadioButton x:Name="ModeWeekly" Content="Weekly · 7-day" GroupName="Mode" Style="{StaticResource Segment}" Checked="Preview_Changed"/>
-                                        <RadioButton x:Name="ModeDual" Content="Orbit · both limits" GroupName="Mode" Style="{StaticResource Segment}" Checked="Preview_Changed"/>
+                                        <RadioButton x:Name="ModeSession" Content="5-hour limit" GroupName="Mode" Style="{StaticResource Segment}" Checked="Preview_Changed"/>
+                                        <RadioButton x:Name="ModeWeekly" Content="Weekly limit" GroupName="Mode" Style="{StaticResource Segment}" Checked="Preview_Changed"/>
+                                        <RadioButton x:Name="ModeDual" Content="Both limits" GroupName="Mode" Style="{StaticResource Segment}" Checked="Preview_Changed"/>
                                         <RadioButton x:Name="ModeHighest" Content="Most used" GroupName="Mode" Style="{StaticResource Segment}" Checked="Preview_Changed"/>
                                     </UniformGrid>
                                 </Border>
@@ -295,6 +298,7 @@
                                 </Border>
                                 <TextBlock Text="Gemini uses its first two model buckets. These are coding-tool quotas, not ChatGPT or Gemini web-chat usage." Style="{StaticResource SecondaryText}" Margin="0,12,0,0"/>
                             </StackPanel></Border>
+                            </StackPanel></Expander>
 
                             <TextBlock Text="ON THE DOCK" Style="{StaticResource GroupLabel}"/>
                             <Border Style="{StaticResource Card}"><StackPanel>
@@ -305,17 +309,36 @@
                             <Border Style="{StaticResource Card}"><StackPanel>
                                 <CheckBox x:Name="PercentBox" Content="Percentage under each ring" Style="{StaticResource Toggle}" Checked="Preview_Changed" Unchecked="Preview_Changed"/>
                                 <CheckBox x:Name="NamesBox" Content="Provider names" Style="{StaticResource Toggle}"/>
+                                <CheckBox x:Name="SecondaryTextBox" Content="Weekly percentage (two-ring mode)" Style="{StaticResource Toggle}"/>
+                                <CheckBox x:Name="UsageSuffixBox" Content="“left” after remaining percentages" Style="{StaticResource Toggle}"/>
+                                <CheckBox x:Name="WindowLabelBox" Content="Name of the limit window" Style="{StaticResource Toggle}"/>
+                                <CheckBox x:Name="SavedBadgeBox" Content="“saved” label for older readings" Style="{StaticResource Toggle}"/>
+                                <CheckBox x:Name="DockResetBox" Content="Reset times on the collapsed dock" Style="{StaticResource Toggle}"/>
+                                <TextBlock Text="Off by default. Hover to see reset details without crowding the dock." Style="{StaticResource SecondaryText}" Margin="0,0,0,6"/>
+                                <CheckBox x:Name="ExpandedResetBox" Content="Reset times in the expanded card" Style="{StaticResource Toggle}"/>
+                            </StackPanel></Border>
+                            <Expander Header="Custom provider names" Foreground="#E5EAF4" Margin="0,2,0,14"><Border Style="{StaticResource Card}" Margin="0,10,0,0"><StackPanel>
+                                <TextBlock Text="Used only on the dock. Leave blank for the original name; turn on Provider names above." Style="{StaticResource SecondaryText}" Margin="0,0,0,10"/>
+                                <TextBlock Text="Claude" Style="{StaticResource SecondaryText}"/><TextBox x:Name="ClaudeLabelField" MaxLength="18" Style="{StaticResource Field}" Margin="0,4,0,10" AutomationProperties.Name="Claude dock label"/>
+                                <TextBlock Text="Codex" Style="{StaticResource SecondaryText}"/><TextBox x:Name="CodexLabelField" MaxLength="18" Style="{StaticResource Field}" Margin="0,4,0,10" AutomationProperties.Name="Codex dock label"/>
+                                <TextBlock Text="Gemini" Style="{StaticResource SecondaryText}"/><TextBox x:Name="GeminiLabelField" MaxLength="18" Style="{StaticResource Field}" Margin="0,4,0,10" AutomationProperties.Name="Gemini dock label"/>
+                                <TextBlock Text="Cursor" Style="{StaticResource SecondaryText}"/><TextBox x:Name="CursorLabelField" MaxLength="18" Style="{StaticResource Field}" Margin="0,4,0,0" AutomationProperties.Name="Cursor dock label"/>
+                            </StackPanel></Border></Expander>
+                            <Expander Header="More display options" Foreground="#E5EAF4" Margin="0,2,0,14"><Border Style="{StaticResource Card}" Margin="0,10,0,0"><StackPanel>
                                 <CheckBox x:Name="AccountNamesBox" Content="Account name in detail cards" Style="{StaticResource Toggle}"/>
                                 <CheckBox x:Name="SleekBox" Content="Sleek proportions (slimmer dock and smaller logos)" Style="{StaticResource Toggle}"/>
                                 <CheckBox x:Name="LogoColorBox" Content="Brand colours for provider logos" Style="{StaticResource Toggle}" Checked="Preview_Changed" Unchecked="Preview_Changed"/>
                                 <CheckBox x:Name="CompactBox" Content="Compact dock (smaller rings, no labels)" Style="{StaticResource Toggle}"/>
                                 <CheckBox x:Name="DashboardBox" Content="Always show the dashboard button in the detail card" Style="{StaticResource Toggle}"/>
-                            </StackPanel></Border>
+                                <TextBlock Text="Compact mode hides all dock text. Expanded cards keep their own settings." Style="{StaticResource SecondaryText}" Margin="0,6,0,0"/>
+                            </StackPanel></Border></Expander>
                         </StackPanel></ScrollViewer>
                     </TabItem>
 
                     <TabItem Header="Appearance" Style="{StaticResource NavTab}">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6,0,22,4"><StackPanel>
+                            <TextBlock Text="Fit your desktop" FontSize="24" FontWeight="SemiBold" Margin="0,6,0,14"/>
+                            <controls:SettingsPreview x:Name="AppearancePreview" Scene="Appearance" Margin="0,0,0,16"/>
                             <TextBlock Text="SIZE AND POSITION" Style="{StaticResource GroupLabel}"/>
                             <Border Style="{StaticResource Card}"><StackPanel>
                                 <Grid><TextBlock Text="Dock size" Style="{StaticResource SectionTitle}"/><TextBlock x:Name="ScaleValue" Style="{StaticResource SliderLabel}" HorizontalAlignment="Right"/></Grid>
@@ -361,6 +384,8 @@
 
                     <TabItem Header="Behaviour" Style="{StaticResource NavTab}">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6,0,22,4"><StackPanel>
+                            <TextBlock Text="How it behaves" FontSize="24" FontWeight="SemiBold" Margin="0,6,0,14"/>
+                            <controls:SettingsPreview x:Name="BehaviorPreview" Scene="Behavior" Margin="0,0,0,16"/>
                             <TextBlock Text="WINDOW" Style="{StaticResource GroupLabel}"/>
                             <Border Style="{StaticResource Card}"><StackPanel>
                                 <CheckBox x:Name="AlwaysVisibleBox" Content="Keep above other windows" Style="{StaticResource Toggle}" />
@@ -491,6 +516,24 @@
                                 <TextBox x:Name="AnthropicBudget" Style="{StaticResource Field}" Height="40" />
                             </StackPanel></Border>
                             <TextBlock Text="Spend comes from each vendor's official cost-reporting API. A budget turns that spend into a percentage ring." Style="{StaticResource SecondaryText}" Margin="3,0,0,0"/>
+                        </StackPanel></ScrollViewer>
+                    </TabItem>
+                    <TabItem Header="Time &amp; Stats" Style="{StaticResource NavTab}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6,0,22,4"><StackPanel>
+                            <TextBlock Text="Clear at a glance" FontSize="24" FontWeight="SemiBold" Margin="0,6,0,5"/>
+                            <TextBlock Text="Local time, in the format that feels natural to you." Style="{StaticResource SecondaryText}" Margin="0,0,0,14"/>
+                            <controls:SettingsPreview x:Name="ClockPreview" Scene="Time" Margin="0,0,0,16"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <TextBlock Text="Clock format" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                                <UniformGrid Columns="2"><RadioButton x:Name="Clock12" Content="1:45 PM" GroupName="ClockFormat" Style="{StaticResource Segment}"/><RadioButton x:Name="Clock24" Content="13:45" GroupName="ClockFormat" Style="{StaticResource Segment}"/></UniformGrid>
+                                <CheckBox x:Name="ClockSecondsBox" Content="Show seconds in clock times" Style="{StaticResource Toggle}" Margin="0,14,0,6"/>
+                                <TextBlock Text="Applies to reset clocks, charts and forecasts. Countdown timers keep their second-by-second precision." Style="{StaticResource SecondaryText}"/>
+                            </StackPanel></Border>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <TextBlock Text="Stats detail" Style="{StaticResource SectionTitle}"/>
+                                <CheckBox x:Name="DetailedStatsBox" Content="Open chart tools and analysis by default" Style="{StaticResource Toggle}"/>
+                                <TextBlock Text="Off keeps Stats focused on usage, reset time and a short forecast. Expand Explore history whenever you want the overview, sessions, patterns and events." Style="{StaticResource SecondaryText}"/>
+                            </StackPanel></Border>
                         </StackPanel></ScrollViewer>
                     </TabItem>
                     <TabItem Header="Updates" Style="{StaticResource NavTab}">

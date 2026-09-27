@@ -21,6 +21,7 @@ public sealed class UsageChart : FrameworkElement
     public DateTimeOffset? SelectionStart { get; set; }
     public DateTimeOffset? SelectionEnd { get; set; }
     public bool Overview { get; set; }
+    public AppSettings TimeSettings { get; set; } = new();
     public event Action<DateTimeOffset, DateTimeOffset>? IntervalSelected;
     public event Action<UsageEvent>? EventClicked;
     private double? _drag;
@@ -63,10 +64,10 @@ public sealed class UsageChart : FrameworkElement
         if (_hover is not { } pos) return;
         var evt = Events.Where(v => v.At >= Start && v.At <= End).MinBy(v => Math.Abs(X(v.At) - pos.X));
         if (pos.Y >= PlotHeight + 10 && evt is not null && Math.Abs(X(evt.At) - pos.X) < 10)
-        { ToolTip = $"{evt.Kind} · {evt.At.ToLocalTime():MMM d, HH:mm:ss zzz}\n{evt.Explanation}\nClick to inspect."; return; }
+        { ToolTip = $"{evt.Kind} · {TimeDisplay.Stamp(evt.At, TimeSettings, true)}\n{evt.Explanation}\nClick to inspect."; return; }
         var point = Points.Where(p => p.At >= Start && p.At <= End).MinBy(p => Math.Abs(X(p.At) - pos.X));
         ToolTip = point is null ? "No observations in this interval." :
-            $"Nearest observed reading · {point.At.ToLocalTime():MMM d yyyy, HH:mm:ss zzz}\n{point.Used * 100:0.###}% used\nReset: {(point.Reset is { } r ? r.ToLocalTime().ToString("ddd, MMM d HH:mm:ss zzz") : "not reported")}";
+            $"Nearest recorded reading · {TimeDisplay.Stamp(point.At, TimeSettings, true)}\n{point.Used * 100:0.###}% used\nReset: {(point.Reset is { } r ? TimeDisplay.Stamp(r, TimeSettings, true) : "not reported")}";
     }
     protected override void OnRender(DrawingContext dc)
     {
@@ -80,8 +81,8 @@ public sealed class UsageChart : FrameworkElement
         var last = Points.LastOrDefault();
         var projectionEnd = last?.Reset is { } reset && reset < End ? reset : End;
         bool project = !Overview && last is not null && last.At < End && last.Reset > last.At && Forecast?.PercentPerHour is not null;
-        if (project) max = Math.Max(max, last!.Used + (Forecast!.HighRate ?? 0) * Math.Max(0, (projectionEnd - last.At).TotalHours));
-        Point Map(DateTimeOffset at, double used) => new(X(at), 8 + PlotHeight * (1 - Math.Clamp(used / max, 0, 1)));
+        // Clip projections at the chart limit without stretching their time axis or inventing a plateau.
+        Point Map(DateTimeOffset at, double used) => new(X(at), 8 + PlotHeight * (1 - used / max));
         void Label(string text, double x, double y, System.Windows.Media.Brush? brush = null) => dc.DrawText(new FormattedText(text, CultureInfo.CurrentCulture,
             System.Windows.FlowDirection.LeftToRight, new Typeface("Segoe UI"), Overview ? 9 : 10, brush ?? ink, VisualTreeHelper.GetDpi(this).PixelsPerDip), new Point(x, y));
         for (var i = 0; i <= (Overview ? 1 : 4); i++)
@@ -121,9 +122,9 @@ public sealed class UsageChart : FrameworkElement
         dc.Pop();
         foreach (var evt in Events.Where(v => v.At >= Start && v.At <= End))
             dc.DrawEllipse(evt.Kind == "Confirmed reset" ? accent : purple, null, new Point(X(evt.At), PlotHeight + 17), 3, 3);
-        Label(Start.ToLocalTime().ToString("MMM d HH:mm"), 40, PlotHeight + 30);
-        Label(End.ToLocalTime().ToString("MMM d HH:mm"), Math.Max(40, ActualWidth - 111), PlotHeight + 30);
-        if (project) Label("Observed | Estimates →", Math.Clamp(X(last!.At) - 80, 42, Math.Max(42, ActualWidth - 180)), 9, purple);
-        if (visible.Length == 0) Label("No readings · missing time is unknown", 44, PlotHeight / 2);
+        Label(Start.ToLocalTime().ToString("MMM d") + " " + TimeDisplay.Clock(Start, TimeSettings.Use24HourTime, TimeSettings.ShowClockSeconds), 40, PlotHeight + 30);
+        Label(End.ToLocalTime().ToString("MMM d") + " " + TimeDisplay.Clock(End, TimeSettings.Use24HourTime, TimeSettings.ShowClockSeconds), Math.Max(40, ActualWidth - (TimeSettings.ShowClockSeconds ? 145 : 126)), PlotHeight + 30);
+        if (project) Label("Estimate →", Math.Clamp(X(last!.At) + 6, 42, Math.Max(42, ActualWidth - 92)), 9, purple);
+        if (visible.Length == 0) Label("No readings in this period", 44, PlotHeight / 2);
     }
 }

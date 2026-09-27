@@ -11,6 +11,7 @@ namespace UsageNotch.Controls;
 public sealed class ProviderLogo : FrameworkElement
 {
     private static readonly Dictionary<string, Geometry> Logos = LoadLogos();
+    internal static Geometry? Shape(string key) => Logos.GetValueOrDefault(key);
     public static readonly DependencyProperty ProviderProperty = DependencyProperty.Register(
         nameof(Provider), typeof(string), typeof(ProviderLogo), new FrameworkPropertyMetadata("codex", FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty ColoredProperty = DependencyProperty.Register(

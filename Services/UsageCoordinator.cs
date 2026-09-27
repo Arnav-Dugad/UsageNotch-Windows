@@ -21,6 +21,7 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
     public ObservableCollection<ProviderViewModel> Items { get; } = [];
     public AlertService Alerts { get; }
     public UsageHistory History { get; }
+    public AppSettings Settings => _settings;
     public DateTimeOffset? LastRefresh { get; private set; }
 
     public event PropertyChangedEventHandler? PropertyChanged;

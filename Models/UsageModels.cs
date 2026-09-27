@@ -108,6 +108,19 @@ public sealed class ProviderViewModel : INotifyPropertyChanged
     // Appearance passthroughs so templates can bind without reaching into settings.
     public bool ShowPercentages => _settings.ShowPercentages && !_settings.CompactMode;
     public bool ShowProviderNames => _settings.ShowProviderNames && !_settings.CompactMode;
+    public bool ShowExpandedResetTimes => _settings.ShowExpandedResetTimes;
+    public bool Use24HourTime => _settings.Use24HourTime;
+    public bool ShowClockSeconds => _settings.ShowClockSeconds;
+    public bool ShowSavedBadge => IsStale && _settings.ShowStatusBadge && !_settings.CompactMode;
+    public string DockWindowLabel => _settings.ShowWindowLabel && !_settings.CompactMode ? PrimaryWindow?.Label ?? "" : "";
+    public string DockName
+    {
+        get
+        {
+            var custom = Id switch { "claude" => _settings.ClaudeDockLabel, "codex" => _settings.CodexDockLabel, "gemini" => _settings.GeminiDockLabel, "cursor" => _settings.CursorDockLabel, _ => "" };
+            return string.IsNullOrWhiteSpace(custom) ? DisplayName : new string(custom.Trim().Where(c => !char.IsControl(c)).Take(18).ToArray());
+        }
+    }
     public bool ReducedMotion => Motion.IsReduced(_settings);
     public bool ColoredLogos => _settings.ColoredLogos;
     public bool Compact => _settings.CompactMode;
@@ -126,11 +139,11 @@ public sealed class ProviderViewModel : INotifyPropertyChanged
     public bool ShowDashboard => (_settings.ShowDashboardButton || Status is SnapshotStatus.Unsupported or SnapshotStatus.Stale or SnapshotStatus.Error) && HasManageUrl;
     public string DashboardLabel => Id == "gemini" && Status == SnapshotStatus.Unsupported ? "Google migration guidance" : "Open dashboard";
 
-    public string PercentText => Status == SnapshotStatus.Loading ? "···" : RingFraction is null ? "—" : $"{Math.Round(Math.Clamp(RingFraction.Value, 0, 1) * 100):0}%" + (ShowRemaining ? " left" : "");
+    public string PercentText => Status == SnapshotStatus.Loading ? "···" : RingFraction is null ? "—" : $"{Math.Round(Math.Clamp(RingFraction.Value, 0, 1) * 100):0}%" + (ShowRemaining && _settings.ShowUsageSuffix ? " left" : "");
     public double UsedPercent => Math.Clamp((UsedFraction ?? 0) * 100.0, 0, 100);
 
     /// <summary>Second line under the ring in orbit mode; stacked so it can never clip the dock.</summary>
-    public string SecondaryLine => Dual && ShowPercentages
+    public string SecondaryLine => Dual && ShowPercentages && _settings.ShowSecondaryPercentage
         ? (Id is "claude" or "codex" ? $"7d {DisplayPercent(WeeklyWindow?.UsedFraction)}" : $"2nd {DisplayPercent(WeeklyWindow?.UsedFraction)}")
         : string.Empty;
 
@@ -144,9 +157,9 @@ public sealed class ProviderViewModel : INotifyPropertyChanged
     };
 
     public string ResetText => ResetTextConverter.Describe(PrimaryWindow?.ResetsAt);
-    public string DockResetLines => string.Join("\n", Windows.Where(w => w.ResetsAt is not null).Take(2).Select(w =>
-        $"{(w.Label.Contains("5-hour", StringComparison.OrdinalIgnoreCase) ? "5h" : w.Label.Contains("week", StringComparison.OrdinalIgnoreCase) ? "7d" : w.Label)} {w.ResetsAt!.Value.ToLocalTime():ddd HH:mm:ss}"));
-    public string DockResetTooltip => string.Join("\n", Windows.Select(w => w.Label + ": " + w.ResetLocalText));
+    public string DockResetLines => !_settings.ShowDockResetTimes || _settings.CompactMode ? "" : string.Join("\n", Windows.Where(w => w.ResetsAt is not null).Take(2).Select(w =>
+        $"{(w.Id == "five_hour" || w.Label.Contains("5-hour", StringComparison.OrdinalIgnoreCase) ? "5h" : w.Id == "seven_day" || w.Label.Contains("week", StringComparison.OrdinalIgnoreCase) ? "7d" : w.Label)} {w.ResetsAt!.Value.ToLocalTime():ddd} {TimeDisplay.Clock(w.ResetsAt.Value, Use24HourTime, ShowClockSeconds)}"));
+    public string DockResetTooltip => string.Join("\n", Windows.Select(w => w.Label + ": " + (w.ResetsAt is { } at ? TimeDisplay.Stamp(at, _settings, true) : "Not reported")));
     public DateTimeOffset ClockNow => DateTimeOffset.Now;
     public string RemainingText => UsedFraction is { } fraction ? $"{Math.Max(0, Math.Round((1 - fraction) * 100)):0}% left" : "";
 
@@ -193,7 +206,7 @@ public sealed class ProviderViewModel : INotifyPropertyChanged
     public string FidelityMark => Snapshot.Fidelity == Fidelity.Official ? "" : "~";
 
     private static string Percent(double? value) => value.HasValue ? $"{Math.Round(value.Value * 100):0}%" : "—";
-    private string DisplayPercent(double? value) => value is { } d ? Percent(ShowRemaining ? 1 - Math.Clamp(d, 0, 1) : d) + (ShowRemaining ? " left" : "") : "—";
+    private string DisplayPercent(double? value) => value is { } d ? Percent(ShowRemaining ? 1 - Math.Clamp(d, 0, 1) : d) + (ShowRemaining && _settings.ShowUsageSuffix ? " left" : "") : "—";
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

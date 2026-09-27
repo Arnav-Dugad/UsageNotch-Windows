@@ -2,9 +2,13 @@
 
 A native Windows 11 edge-pinned usage monitor inspired by the open-source **Codenotch** macOS design.
 
-**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.1.0**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
+**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.2.0**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
 
-2.1 adds a resizable Claude/Codex comparison workspace, unlimited local history, interactive charts, explainable pace estimates, observation sessions and personal patterns. The dock expands while Stats is open and shows exact local reset clocks. Verified automatic updates show download progress and installation stages. Download the latest app from [GitHub Releases](https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest).
+2.2 simplifies Stats and adds customizable dock text, animated sample previews and clean AM/PM clocks. Reset times appear in expanded cards by default; collapsed-dock reset labels are optional. Claude and Codex remain visible together, with unlimited local history and explainable estimates. Download the latest app from [GitHub Releases](https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest).
+
+**Dock** settings control provider names, percentages, secondary percentages, the “left” suffix, window labels, saved-reading badges and reset-time placement. Custom dock labels are available for Claude, Codex, Gemini and Cursor. Compact mode hides all dock text. Sample previews animate visual changes and respect reduced-motion preferences; edits also preview on the real dock until Save or Cancel.
+
+**Time & Stats** offers 12-hour AM/PM (default), 24-hour time, optional clock seconds, and a detailed Stats default. The main Stats cards show usage, reset time, a short estimate and the chart. **Explore history** reveals overview navigation, sessions, patterns and events. Existing observations, credentials and other preferences are preserved.
 
 Account names use Claude Code's local profile or Codex's documented [`account/read` response](https://learn.chatgpt.com/docs/app-server); the app does not decode Codex auth files. Multiple simultaneous accounts are not enabled because isolated provider login lifecycles have not been verified.
 
@@ -41,7 +45,7 @@ The window supports resizing, minimize/maximize, F11 full screen and remembered 
 
 Forecasts are estimates, never provider guarantees. They need at least three live observations spanning ten minutes within one limit period, with no gap over twenty minutes and a latest observation no older than fifteen minutes. The rate is the observed increase in percentage points per hour over up to three hours. A constant-pace extrapolation estimates usage at the reported reset, or when the limit would be reached first. Flat readings say **No increase observed**. Unknown reset times, stale/error readings and insufficient history suppress the forecast. Usage decreases, changed reset timestamps and long gaps restart learning. Rolling limits, account changes not reported by a provider, and changes in future activity can invalidate estimates.
 
-Countdowns show days and `HH:mm:ss`, alongside exact local timestamps and UTC offsets in Stats and the dock's expanded cards. Compact dock labels show the first two reported reset clocks. An expired timestamp says **awaiting provider confirmation** until a fresh reading confirms the reset.
+Countdowns show days and `HH:mm:ss`. Reset clocks use clean local AM/PM by default; 24-hour time and seconds are configurable. Exact timestamps with seconds and UTC offsets remain available in Stats tooltips. Optional collapsed-dock labels show the first two reported reset clocks; expanded cards show reset clocks by default. An expired countdown says **awaiting provider confirmation** until a fresh reading confirms the reset.
 
 ## Automatic updates and publishing
 

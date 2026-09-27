@@ -12,6 +12,7 @@
         <local:NullToBoolConverter x:Key="NullToBool"/>
         <local:ResetTextConverter x:Key="ResetText"/>
         <local:LiveResetTextConverter x:Key="LiveResetText"/>
+        <local:LocalResetDisplayConverter x:Key="LocalResetDisplay"/>
         <local:FractionToPercentConverter x:Key="PercentText"/>
         <local:FractionToRemainingConverter x:Key="RemainingText"/>
         <local:UsageBrushConverter x:Key="UsageBrush"/>
@@ -91,7 +92,7 @@
                                         Foreground="{DynamicResource DockText}"
                                         Width="{Binding LogoSize}" Height="{Binding LogoSize}" IsHitTestVisible="False"/>
                                 </Grid>
-                                <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource DockMuted}" FontFamily="{StaticResource UIFont}"
+                                <TextBlock Text="{Binding DockName}" ToolTip="{Binding DockName}" Foreground="{DynamicResource DockMuted}" FontFamily="{StaticResource UIFont}"
                                            FontSize="10" HorizontalAlignment="Center" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"
                                            Visibility="{Binding ShowProviderNames, Converter={StaticResource BoolVisibility}}"/>
                                 <TextBlock Text="{Binding PercentText}" Foreground="{DynamicResource DockText}" FontFamily="{StaticResource UIFont}"
@@ -102,8 +103,9 @@
                                            Visibility="{Binding SecondaryLine, Converter={StaticResource Presence}}"/>
                                 <TextBlock Text="{Binding DockResetLines}" ToolTip="{Binding DockResetTooltip}" Foreground="{DynamicResource DockFaint}"
                                            FontSize="8" TextAlignment="Center" Margin="0,3,0,0" TextWrapping="Wrap" Visibility="{Binding DockResetLines, Converter={StaticResource Presence}}"/>
+                                <TextBlock Text="{Binding DockWindowLabel}" ToolTip="{Binding DockWindowLabel}" Foreground="{DynamicResource DockFaint}" FontSize="9" TextAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" Visibility="{Binding DockWindowLabel, Converter={StaticResource Presence}}"/>
                                 <Border Background="{DynamicResource DockRaised}" CornerRadius="6" Padding="5,1" Margin="0,4,0,0" HorizontalAlignment="Center"
-                                        Visibility="{Binding IsStale, Converter={StaticResource BoolVisibility}}">
+                                        Visibility="{Binding ShowSavedBadge, Converter={StaticResource BoolVisibility}}">
                                     <TextBlock Text="saved" Foreground="{DynamicResource DockFaint}" FontFamily="{StaticResource UIFont}" FontSize="8.5"/>
                                 </Border>
                             </StackPanel>
@@ -183,14 +185,16 @@
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                 <TextBlock Text="{Binding Converter={StaticResource AmountText}}" Foreground="{DynamicResource DockFaint}"
                                                            FontFamily="{StaticResource UIFont}" FontSize="10" TextTrimming="CharacterEllipsis" Margin="0,0,8,0"/>
-                                                <TextBlock Grid.Column="1" Foreground="{DynamicResource DockFaint}" FontFamily="{StaticResource UIFont}" FontSize="10">
+                                                <TextBlock Grid.Column="1" Foreground="{DynamicResource DockFaint}" FontFamily="{StaticResource UIFont}" FontSize="10" Visibility="{Binding DataContext.ShowExpandedResetTimes, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolVisibility}}">
                                                     <TextBlock.Text><MultiBinding Converter="{StaticResource LiveResetText}">
                                                         <Binding Path="ResetsAt"/>
                                                         <Binding Path="DataContext.ClockNow" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
                                                     </MultiBinding></TextBlock.Text>
                                                 </TextBlock>
                                             </Grid>
-                                            <TextBlock Text="{Binding ResetLocalText}" Foreground="{DynamicResource DockFaint}" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                            <TextBlock Foreground="{DynamicResource DockMuted}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0" Visibility="{Binding DataContext.ShowExpandedResetTimes, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolVisibility}}">
+                                                <TextBlock.Text><MultiBinding Converter="{StaticResource LocalResetDisplay}"><Binding Path="ResetsAt"/><Binding Path="DataContext.Use24HourTime" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/><Binding Path="DataContext.ShowClockSeconds" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/><Binding Path="DataContext.ClockNow" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/></MultiBinding></TextBlock.Text>
+                                            </TextBlock>
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate></ItemsControl.ItemTemplate>

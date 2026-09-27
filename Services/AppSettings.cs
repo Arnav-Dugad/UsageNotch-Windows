@@ -28,6 +28,19 @@ public sealed class AppSettings
     public bool ShowAccountNames { get; set; } = true;
     public bool SleekMode { get; set; } = true;
     public bool ShowProviderNames { get; set; }
+    public bool ShowDockResetTimes { get; set; }
+    public bool ShowExpandedResetTimes { get; set; } = true;
+    public bool ShowSecondaryPercentage { get; set; } = true;
+    public bool ShowUsageSuffix { get; set; } = true;
+    public bool ShowWindowLabel { get; set; }
+    public bool ShowStatusBadge { get; set; } = true;
+    public bool Use24HourTime { get; set; }
+    public bool ShowClockSeconds { get; set; }
+    public bool DetailedStats { get; set; }
+    public string ClaudeDockLabel { get; set; } = "";
+    public string CodexDockLabel { get; set; } = "";
+    public string GeminiDockLabel { get; set; } = "";
+    public string CursorDockLabel { get; set; } = "";
     public bool ColoredLogos { get; set; } = true;
     public bool ShowDashboardButton { get; set; }
     public bool GlassSurface { get; set; } = true;

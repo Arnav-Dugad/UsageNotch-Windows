@@ -1,4 +1,4 @@
-# UsageNotch 2.1.0 — quick start
+# UsageNotch 2.2.0 — quick start
 
 ## Start the updated app
 
@@ -10,7 +10,15 @@ If you ever lose the dock, just run `UsageNotch.exe` again — a second launch b
 
 The tray tooltip and Settings header identify the version. Old builds are in `Release/Archive` for recovery; do not launch those for everyday use. The ZIP `Release/UsageNotch-win-x64.zip` always contains the most recently built release. If Windows startup was already enabled, opening the new release updates its startup path automatically.
 
-## Stats, forecasts and updates in 2.1
+## Dock text, clocks and simpler Stats in 2.2
+
+The collapsed dock hides reset times by default. Hover over a provider to see them in its expanded card. Open **Stats & Settings → Dock** to choose which text appears, enable collapsed-dock reset clocks, hide expanded reset details, or give providers custom dock names. Compact mode hides all dock text.
+
+Open **Time & Stats** for **1:45 PM** or **13:45**, optional clock seconds, and the default level of Stats detail. Countdown timers keep second-by-second precision. The graphic previews use sample data and animate setting changes; reduced motion disables the transitions. Changes preview live, **Save changes** keeps them, and **Cancel** restores your previous preferences.
+
+Stats starts with a simple usage/reset/forecast summary and chart. Expand **Explore history** for the overview, reset-period zoom, sessions, patterns and events. Enable detailed Stats if you prefer those tools open by default.
+
+## Stats, forecasts and updates
 
 Open **Stats & Settings** from the dock/tray menu or run `UsageNotch.exe --settings`. Claude and Codex are visible together, with independent limit buttons and time ranges. Charts show **usage used**, even when the dock shows remaining usage. History stays local with no automatic expiry. There is no backfill; data already deleted by older releases cannot be recovered. Providers without a reported account identity begin a new series each launch.
 

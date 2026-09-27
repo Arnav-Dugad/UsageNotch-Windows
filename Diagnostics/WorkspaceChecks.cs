@@ -33,6 +33,29 @@ internal static class WorkspaceChecks
         var reset = new LimitWindow("test", "5-hour window", .2, DateTimeOffset.UtcNow.AddHours(1));
         if (!reset.ResetLocalText.Contains(reset.ResetsAt!.Value.ToLocalTime().ToString("HH:mm:ss zzz"))) throw new Exception("Exact local reset missing offset or seconds.");
         window.Close(); dock.Close();
+        CheckDisplayPreferences();
         Console.WriteLine("PASS: settings-open dock hover, independent resizable window, both comparison providers and exact local reset timestamps.");
+    }
+    private static void CheckDisplayPreferences()
+    {
+        var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{\"ShowRemaining\":true,\"DisplayMode\":\"Dual\"}")!;
+        var noon = new DateTimeOffset(new DateTime(2030, 1, 1, 12, 0, 30), TimeZoneInfo.Local.GetUtcOffset(new DateTime(2030, 1, 1)));
+        var vm = new ProviderViewModel(new("claude", "Claude", "", Fidelity.Manual, SnapshotStatus.Stale,
+            [new("five_hour", "5-hour window", .73, noon), new("seven_day", "Weekly window", .34, noon.AddDays(3))], FetchedAt: noon), settings);
+        if (settings.ShowDockResetTimes || !settings.ShowExpandedResetTimes || settings.Use24HourTime || vm.DockResetLines != "") throw new Exception("Old settings did not migrate to a clean dock and AM/PM clocks.");
+        settings.ShowDockResetTimes = true;
+        if (!vm.DockResetLines.Contains("12:00 PM") || vm.DockResetLines.Contains("12:00:30")) throw new Exception("Dock AM/PM preference failed.");
+        settings.Use24HourTime = true; settings.ShowClockSeconds = true;
+        if (!vm.DockResetLines.Contains("12:00:30")) throw new Exception("24-hour second precision failed.");
+        if (TimeDisplay.Clock(noon.AddHours(-12)) != "12:00 AM" || TimeDisplay.Clock(noon, false, true) != "12:00:30 PM" || TimeDisplay.Clock(noon.AddHours(-12), true) != "00:00") throw new Exception("Noon/midnight clock boundary failed.");
+        settings.ShowUsageSuffix = false; settings.ShowSecondaryPercentage = false; settings.ShowStatusBadge = false;
+        if (vm.PercentText.Contains("left") || vm.SecondaryLine.Length > 0 || vm.ShowSavedBadge) throw new Exception("Independent dock text controls failed.");
+        settings.ClaudeDockLabel = "Personal\nworkspace with a very long name";
+        if (vm.DockName.Length > 18 || vm.DockName.Contains('\n')) throw new Exception("Custom dock label was not bounded.");
+        settings.ShowWindowLabel = true; settings.CompactMode = true;
+        if (vm.DockResetLines.Length > 0 || vm.DockWindowLabel.Length > 0 || vm.ShowPercentages || vm.ShowProviderNames) throw new Exception("Compact mode leaked dock text.");
+        var saved = settings.Clone(); var clone = new AppSettings(); clone.CopyFrom(saved);
+        if (clone.ShowExpandedResetTimes != saved.ShowExpandedResetTimes || clone.ClaudeDockLabel != saved.ClaudeDockLabel || clone.Use24HourTime != saved.Use24HourTime) throw new Exception("Display preferences did not survive clone/restore.");
+        Console.WriteLine("PASS: clean-dock migration, independent text controls, custom labels, compact behavior, 12/24-hour noon/midnight/seconds and settings round trips.");
     }
 }

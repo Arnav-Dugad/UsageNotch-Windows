@@ -130,6 +130,14 @@ public sealed class LimitAmountConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
+public sealed class LocalResetDisplayConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture) =>
+        TimeDisplay.Reset(values.FirstOrDefault() is DateTimeOffset at ? at : null,
+            new AppSettings { Use24HourTime = values.Length > 1 && values[1] is true, ShowClockSeconds = values.Length > 2 && values[2] is true });
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
 public sealed class FractionToWidthConverter : IMultiValueConverter
 {
     public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)

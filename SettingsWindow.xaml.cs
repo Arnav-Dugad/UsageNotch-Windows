@@ -205,6 +205,19 @@ public partial class SettingsWindow : Window
         _settings.ShowAccountNames = AccountNamesBox.IsChecked == true;
         _settings.SleekMode = SleekBox.IsChecked == true;
         _settings.ShowProviderNames = NamesBox.IsChecked == true;
+        _settings.ShowDockResetTimes = DockResetBox.IsChecked == true;
+        _settings.ShowExpandedResetTimes = ExpandedResetBox.IsChecked == true;
+        _settings.ShowSecondaryPercentage = SecondaryTextBox.IsChecked == true;
+        _settings.ShowUsageSuffix = UsageSuffixBox.IsChecked == true;
+        _settings.ShowWindowLabel = WindowLabelBox.IsChecked == true;
+        _settings.ShowStatusBadge = SavedBadgeBox.IsChecked == true;
+        _settings.Use24HourTime = Clock24.IsChecked == true;
+        _settings.ShowClockSeconds = ClockSecondsBox.IsChecked == true;
+        _settings.DetailedStats = DetailedStatsBox.IsChecked == true;
+        _settings.ClaudeDockLabel = ClaudeLabelField.Text.Trim();
+        _settings.CodexDockLabel = CodexLabelField.Text.Trim();
+        _settings.GeminiDockLabel = GeminiLabelField.Text.Trim();
+        _settings.CursorDockLabel = CursorLabelField.Text.Trim();
         _settings.ColoredLogos = LogoColorBox.IsChecked == true;
         _settings.ShowDashboardButton = DashboardBox.IsChecked == true;
         _settings.ReducedMotion = ReducedMotionBox.IsChecked == true;
@@ -227,8 +240,8 @@ public partial class SettingsWindow : Window
         Bind(AutoHideSlider, AutoHideValue, value => $"{value / 1000:0.##} s");
         Bind(WarnSlider, WarnValue, value => $"{value:0}%");
         Bind(CriticalSlider, CriticalValue, value => $"{value:0}%");
-        Bind(QuietStartSlider, QuietStartValue, value => $"{value:00}:00");
-        Bind(QuietEndSlider, QuietEndValue, value => $"{value:00}:00");
+        Bind(QuietStartSlider, QuietStartValue, value => HourLabel((int)value));
+        Bind(QuietEndSlider, QuietEndValue, value => HourLabel((int)value));
     }
 
     private static void Bind(Slider slider, TextBlock label, Func<double, string> format)
@@ -236,6 +249,7 @@ public partial class SettingsWindow : Window
         label.Text = format(slider.Value);
         slider.ValueChanged += (_, args) => label.Text = format(args.NewValue);
     }
+    private string HourLabel(int hour) => _settings.Use24HourTime ? $"{hour:00}:00" : $"{(hour % 12 == 0 ? 12 : hour % 12)}:00 {(hour < 12 ? "AM" : "PM")}";
 
     /// <summary>Called by the dock when the vertical position changes by dragging.</summary>
     public void SyncFromDock()
@@ -256,6 +270,13 @@ public partial class SettingsWindow : Window
 
     private void UpdatePreview()
     {
+        if (_settings is not null)
+        {
+            DockTextPreview.Update(_settings); AppearancePreview.Update(_settings);
+            BehaviorPreview.Update(_settings); ClockPreview.Update(_settings);
+            QuietStartValue.Text = HourLabel((int)QuietStartSlider.Value);
+            QuietEndValue.Text = HourLabel((int)QuietEndSlider.Value);
+        }
         if (_suspend) return;
         var dual = ModeDual.IsChecked == true;
         var used = ModeWeekly.IsChecked == true ? .34 : .73;
@@ -363,6 +384,20 @@ public partial class SettingsWindow : Window
         AccountNamesBox.IsChecked = settings.ShowAccountNames;
         SleekBox.IsChecked = settings.SleekMode;
         NamesBox.IsChecked = settings.ShowProviderNames;
+        DockResetBox.IsChecked = settings.ShowDockResetTimes;
+        ExpandedResetBox.IsChecked = settings.ShowExpandedResetTimes;
+        SecondaryTextBox.IsChecked = settings.ShowSecondaryPercentage;
+        UsageSuffixBox.IsChecked = settings.ShowUsageSuffix;
+        WindowLabelBox.IsChecked = settings.ShowWindowLabel;
+        SavedBadgeBox.IsChecked = settings.ShowStatusBadge;
+        Clock12.IsChecked = !settings.Use24HourTime;
+        Clock24.IsChecked = settings.Use24HourTime;
+        ClockSecondsBox.IsChecked = settings.ShowClockSeconds;
+        DetailedStatsBox.IsChecked = settings.DetailedStats;
+        ClaudeLabelField.Text = settings.ClaudeDockLabel;
+        CodexLabelField.Text = settings.CodexDockLabel;
+        GeminiLabelField.Text = settings.GeminiDockLabel;
+        CursorLabelField.Text = settings.CursorDockLabel;
         LogoColorBox.IsChecked = settings.ColoredLogos;
         DashboardBox.IsChecked = settings.ShowDashboardButton;
         ReducedMotionBox.IsChecked = settings.ReducedMotion;
@@ -427,7 +462,7 @@ public partial class SettingsWindow : Window
         UpdateSnoozeStatus();
     }
     private void UpdateSnoozeStatus() => SnoozeStatus.Text = _settings.AlertsSnoozedUntil > DateTimeOffset.Now
-        ? $"Snoozed until {_settings.AlertsSnoozedUntil.Value.ToLocalTime():h:mm tt}. Save changes to keep this setting." : "Not snoozed.";
+        ? $"Snoozed until {TimeDisplay.Clock(_settings.AlertsSnoozedUntil.Value, _settings.Use24HourTime)}. Save changes to keep this setting." : "Not snoozed.";
 
     private void GeminiGuide_Click(object sender, RoutedEventArgs e) => System.Windows.MessageBox.Show(this,
         "1. Your Google sign-in worked. Google has disabled this older quota connection for your account.\n\n" +
