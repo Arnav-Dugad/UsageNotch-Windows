@@ -1,6 +1,22 @@
 # UsageNotch for Windows
 
-A native Windows 11 edge-pinned usage monitor inspired by the open-source **Codenotch** macOS design.
+A native Windows 11 edge-pinned usage monitor inspired by the open-source **Codenotch** macOS design. It shows how much of your Claude, Codex, Gemini and Cursor limits you have left, and when they reset.
+
+## Download
+
+**[Download page with setup guide → arnav-dugad.github.io/UsageNotch-Windows](https://arnav-dugad.github.io/UsageNotch-Windows/)**
+
+| Get | File | Link |
+| --- | --- | --- |
+| **UsageNotch for Windows** (Windows 10/11, x64) | `UsageNotch.exe`, or the smaller `UsageNotch-*-win-x64.zip` | [Latest release](https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest) |
+| **UsageNotch for Android** (Android 9+) | `UsageNotch-*.apk` | [Android releases](https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest) |
+| **UsageNotch Link**, which connects the phone to this PC | `UsageNotch-Link-*-win-x64.zip` | [Android releases](https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest) |
+
+No installer or .NET runtime is needed. Download `UsageNotch.exe` and double-click it. The app isn't code-signed, so if Windows SmartScreen appears, choose **More info → Run anyway**. Installed copies update themselves from GitHub Releases after verifying a signed update manifest.
+
+The Android app shows the same limits on your phone and home-screen widgets, with reset alerts. It keeps working when this PC is off, and optional end-to-end encrypted internet sync brings readings to your phone away from home. See the [Android setup guide](https://github.com/Arnav-Dugad/UsageNotch-Android#set-up-in-five-minutes).
+
+## For development
 
 **Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.2.0**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
 

@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UsageNotch · Download</title>
+<meta name="description" content="Download UsageNotch for Windows and Android: see your Claude, Codex, Gemini and Cursor usage limits on your desktop, your phone and your home screen.">
+<meta property="og:title" content="UsageNotch — your AI usage limits, at a glance">
+<meta property="og:description" content="Free download for Windows and Android. Claude, Codex, Gemini and Cursor limits with reset countdowns, widgets and reset alerts.">
+<meta property="og:image" content="https://arnav-dugad.github.io/UsageNotch-Windows/logo.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+:root {
+  --bg: #09111f; --bg-2: #111b2f; --surface: rgba(255,255,255,.055); --surface-2: rgba(255,255,255,.085);
+  --line: rgba(255,255,255,.12); --ink: #eef5ff; --muted: #adbdd2; --mint: #ace8da; --mint-ink: #07231f;
+  --peach: #f1bd9a; --lavender: #c9bdf5; --shadow: 0 24px 60px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f5f8fc; --bg-2: #eaf0f8; --surface: #ffffff; --surface-2: #f1f5fb; --line: rgba(9,17,31,.12);
+    --ink: #0d1728; --muted: #4c5b72; --mint: #1c7c6c; --mint-ink: #ffffff; --peach: #a55a2a; --lavender: #5b48b0;
+    --shadow: 0 18px 44px rgba(20,40,80,.12); color-scheme: light;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); line-height: 1.55;
+  font: 16px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-image: radial-gradient(60rem 40rem at 95% -10%, rgba(71,122,123,.28), transparent 60%), radial-gradient(50rem 40rem at -10% 60%, rgba(119,87,154,.18), transparent 60%);
+  background-attachment: fixed;
+}
+a { color: var(--mint); }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+header.top { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 12px; color: var(--ink); text-decoration: none; font-weight: 600; letter-spacing: .02em; }
+.brand img { width: 36px; height: 36px; border-radius: 10px; }
+nav a { color: var(--muted); text-decoration: none; margin-left: 18px; font-size: 15px; }
+nav a:hover { color: var(--ink); }
+.hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 40px; align-items: center; padding: 40px 0 56px; }
+.eyebrow { color: var(--mint); font-size: 12px; letter-spacing: .28em; font-weight: 600; text-transform: uppercase; }
+h1 { font-size: clamp(36px, 6vw, 60px); line-height: 1.04; font-weight: 300; letter-spacing: -.03em; margin: 14px 0 18px; }
+.lede { color: var(--muted); font-size: 19px; max-width: 34ch; margin: 0 0 28px; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 20px; border-radius: 999px; font-weight: 600; text-decoration: none; border: 1px solid var(--line); color: var(--ink); background: var(--surface); transition: transform .15s ease, background .15s ease; }
+.btn:hover { transform: translateY(-1px); background: var(--surface-2); }
+.btn.primary { background: var(--mint); color: var(--mint-ink); border-color: transparent; }
+.btn svg { width: 18px; height: 18px; flex: none; }
+.hero-art { position: relative; display: flex; justify-content: center; }
+.hero-art img { width: min(300px, 80%); border-radius: 34px; box-shadow: var(--shadow); border: 1px solid var(--line); }
+.offline-grid { display: grid; grid-template-columns: 1fr 250px; gap: 24px; align-items: start; }
+.offline-grid figure { margin: 0; }
+.offline-grid img { width: 100%; height: auto; border-radius: 26px; box-shadow: var(--shadow); }
+.offline-grid figcaption { color: var(--muted); font-size: 13px; margin-top: 10px; text-align: center; }
+section { padding: 36px 0; }
+h2 { font-size: 30px; font-weight: 400; letter-spacing: -.02em; margin: 0 0 8px; }
+.sub { color: var(--muted); margin: 0 0 26px; max-width: 62ch; }
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow); }
+.card h3 { margin: 0; font-size: 20px; font-weight: 600; }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); width: fit-content; }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+.card .meta { font-size: 13px; color: var(--muted); min-height: 1.4em; }
+.card .btn { margin-top: auto; justify-content: center; }
+.card .alt { font-size: 14px; text-align: center; }
+.steps { counter-reset: step; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; padding: 0; margin: 0; list-style: none; }
+.steps li { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 22px; color: var(--muted); font-size: 15px; }
+.steps li::before { counter-increment: step; content: counter(step); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--mint); color: var(--mint-ink); font-weight: 700; margin-bottom: 12px; }
+.steps strong { color: var(--ink); }
+.features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+.feature { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 22px; }
+.feature h3 { margin: 0 0 6px; font-size: 17px; }
+.feature p { margin: 0; color: var(--muted); font-size: 15px; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; margin-bottom: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+details p { color: var(--muted); margin: 10px 0 0; font-size: 15px; }
+code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .92em; background: var(--surface-2); padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+footer { color: var(--muted); font-size: 14px; padding: 40px 0 56px; border-top: 1px solid var(--line); margin-top: 30px; }
+footer a { color: var(--muted); }
+.notice { background: color-mix(in srgb, var(--peach) 14%, transparent); border: 1px solid color-mix(in srgb, var(--peach) 40%, transparent); color: var(--ink); border-radius: 16px; padding: 14px 18px; font-size: 15px; margin-bottom: 22px; }
+@media (max-width: 860px) {
+  .hero { grid-template-columns: 1fr; padding-top: 16px; }
+  .hero-art { margin-top: 10px; }
+  .cards, .steps { grid-template-columns: 1fr; }
+  .features, .offline-grid { grid-template-columns: 1fr; }
+  .offline-grid figure { max-width: 260px; margin: 0 auto; }
+  nav { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } .btn:hover { transform: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#"><img src="logo.png" alt="" width="36" height="36">UsageNotch</a>
+    <nav aria-label="Page sections"><a href="#download">Download</a><a href="#setup">Setup</a><a href="#offline">Offline</a><a href="#faq">FAQ</a></nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div>
+        <div class="eyebrow">Free · Windows &amp; Android</div>
+        <h1>Your AI usage limits, at a glance.</h1>
+        <p class="lede">See how much of your Claude, Codex, Gemini and Cursor limits you have left, and when they reset: on your Windows desktop, your phone and your home screen.</p>
+        <div class="cta">
+          <a class="btn primary" id="hero-windows" href="https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M3 5.1 10.4 4v7.2H3zm8.4-1.2L21 2.5v8.7h-9.6zM3 12.3h7.4v7.2L3 18.4zm8.4 0H21V21l-9.6-1.4z"/></svg>
+            Download for Windows</a>
+          <a class="btn" id="hero-android" href="https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M17.6 9.5 19.4 6.3a.4.4 0 0 0-.7-.4l-1.8 3.2A10.9 10.9 0 0 0 12 8a10.9 10.9 0 0 0-4.9 1.1L5.3 5.9a.4.4 0 1 0-.7.4l1.8 3.2A9.9 9.9 0 0 0 1.5 17h21a9.9 9.9 0 0 0-4.9-7.5zM7 14.2a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm10 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>
+            Get the Android app</a>
+        </div>
+      </div>
+      <div class="hero-art">
+        <img src="phone-overview.png" width="405" height="900" alt="UsageNotch on Android showing sample data: Claude 5-hour window with 73% remaining and a reset countdown">
+      </div>
+    </div>
+
+    <section id="download" aria-labelledby="download-title">
+      <h2 id="download-title">Download</h2>
+      <p class="sub">Start with the Windows app: it reads your limits from the accounts you're already signed in to. Add the Android app and Link to carry them to your phone.</p>
+      <div class="notice"><strong>If the Android app closed as soon as you opened it,</strong> install Android 1.1.0 or newer. It fixes the startup crash in 1.0.0 and 1.0.1 and installs over them.</div>
+      <div class="cards">
+        <article class="card">
+          <span class="tag">Windows 10 / 11 · x64</span>
+          <h3>UsageNotch for Windows</h3>
+          <p>A dock pinned to your screen edge with live rings, reset countdowns, alerts and full usage history. No installer and no .NET needed.</p>
+          <div class="meta" id="win-meta">Latest release on GitHub</div>
+          <a class="btn primary" id="win-exe" href="https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest">Download UsageNotch.exe</a>
+          <a class="alt" id="win-zip" href="https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest">or the smaller ZIP</a>
+        </article>
+        <article class="card">
+          <span class="tag">Android 9 or newer</span>
+          <h3>UsageNotch for Android</h3>
+          <p>Your limits in your pocket: animated rings, home-screen widgets, reset alerts and an offline mode. Open the APK on your phone to install it.</p>
+          <div class="meta" id="apk-meta">Latest release on GitHub</div>
+          <a class="btn primary" id="apk" href="https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest">Download the APK</a>
+          <a class="alt" href="https://github.com/Arnav-Dugad/UsageNotch-Android#set-up-in-five-minutes">Setup guide</a>
+        </article>
+        <article class="card">
+          <span class="tag">Windows · for the Android app</span>
+          <h3>UsageNotch Link</h3>
+          <p>Pairs your phone with your PC over Wi-Fi, with optional end-to-end encrypted internet sync. Runs quietly in the notification area.</p>
+          <div class="meta" id="link-meta">Latest release on GitHub</div>
+          <a class="btn primary" id="link" href="https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest">Download Link</a>
+          <a class="alt" id="sums" href="https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest">SHA-256 checksums</a>
+        </article>
+      </div>
+    </section>
+
+    <section id="setup" aria-labelledby="setup-title">
+      <h2 id="setup-title">Set up in five minutes</h2>
+      <p class="sub">You only need the phone steps if you want the Android app.</p>
+      <ol class="steps">
+        <li><strong>Run UsageNotch on Windows.</strong> Open <code>UsageNotch.exe</code>. If SmartScreen appears, choose More info → Run anyway. Connect Claude, Codex, Gemini or Cursor in Settings.</li>
+        <li><strong>Start UsageNotch Link.</strong> Extract the Link ZIP, run it and click <em>Start secure link</em>. Allow Private networks if Windows Firewall asks, then click <em>Copy pairing code</em>.</li>
+        <li><strong>Pair your phone.</strong> Install the APK, open UsageNotch and tap <em>Paste pairing code</em>. Add a widget from the Widgets tab and turn on Reset alerts in Settings.</li>
+      </ol>
+    </section>
+
+    <section id="offline" aria-labelledby="offline-title">
+      <h2 id="offline-title">Keeps working when your PC is off</h2>
+      <p class="sub">Your sign-ins stay on Windows, so new usage is measured there. When the PC is off or you're away, the phone stays useful and never pretends.</p>
+      <div class="offline-grid">
+      <div class="features">
+        <div class="feature"><h3>Saved readings, live countdowns</h3><p>The app and widgets keep your last readings, marked with their age, and count down to each reset. The status says <em>PC offline</em>, not an error.</p></div>
+        <div class="feature"><h3>Renewed, right on time</h3><p>When a reset time passes, the window shows <em>Renewed</em>, and with Reset alerts on your phone notifies you. It needs no connection at all.</p></div>
+        <div class="feature"><h3>Optional encrypted internet sync</h3><p>Link can upload each reading to a secret gist in your own GitHub account, encrypted with a key only your paired phone has. Get readings on mobile data, and keep the last one after the PC shuts down.</p></div>
+        <div class="feature"><h3>Private by design</h3><p>No accounts, ads, analytics or tracking. AI tokens never leave Windows, and Wi-Fi pairing uses HTTPS pinned to your PC's own certificate.</p></div>
+      </div>
+      <figure><img src="home-widget-offline.png" width="456" height="756" loading="lazy" alt="UsageNotch home-screen widget while the PC is offline: saved Claude readings and a Codex window marked Renewed"><figcaption>The widget with the PC offline</figcaption></figure>
+      </div>
+    </section>
+
+    <section id="faq" aria-labelledby="faq-title">
+      <h2 id="faq-title">Questions</h2>
+      <details><summary>Windows says “Windows protected your PC”</summary><p>UsageNotch and Link aren't code-signed with a paid certificate yet, so SmartScreen doesn't recognize them. Choose <em>More info → Run anyway</em>. You can compare the download with the SHA-256 checksums published on each release.</p></details>
+      <details><summary>Android won't install the APK</summary><p>Android asks you to allow installs from the app you downloaded it with, such as Chrome or Files. Allow it once, then open the APK again. Updates install over the existing app and keep your pairing.</p></details>
+      <details><summary>The phone says “Couldn't reach your PC”</summary><p>Start the secure link in UsageNotch Link, choose your Wi-Fi address (not <code>vEthernet</code> or WSL), keep both devices on the same Wi-Fi or a private VPN such as Tailscale, and allow Link on Private networks in Windows Firewall.</p></details>
+      <details><summary>Can the phone check my usage without the PC?</summary><p>Not new usage: only UsageNotch on Windows signs in to Claude, ChatGPT, Gemini and Cursor, and your credentials aren't copied to the phone. Saved readings, countdowns, Renewed states and reset alerts all work offline, and internet sync gives you the latest reading from anywhere.</p></details>
+      <details><summary>Which providers are supported?</summary><p>Claude (Claude Code sign-in), Codex (ChatGPT sign-in), Cursor, Gemini Code Assist where Google still allows its CLI sign-in, and month-to-date API spend for OpenAI and Anthropic with Admin keys. Each provider's usage windows are shown separately.</p></details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Source code: <a href="https://github.com/Arnav-Dugad/UsageNotch-Windows">UsageNotch for Windows</a> · <a href="https://github.com/Arnav-Dugad/UsageNotch-Android">UsageNotch for Android and Link</a> · <a href="https://github.com/Arnav-Dugad/UsageNotch-Android/issues">Report a problem</a></p>
+    <p>Independent community project. Not affiliated with Anthropic, OpenAI, Google, Cursor or GitHub. Android screens show sample data.</p>
+  </footer>
+</div>
+<script>
+// Fill in exact file names, versions and sizes from GitHub Releases. Without this, every button still opens the latest release page.
+(function () {
+  function size(bytes) { return bytes >= 1048576 ? Math.round(bytes / 1048576) + " MB" : Math.max(1, Math.round(bytes / 1024)) + " KB"; }
+  function date(text) { try { return new Date(text).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); } catch (e) { return ""; } }
+  function set(id, asset, label) {
+    var el = document.getElementById(id);
+    if (!el || !asset) return;
+    el.href = asset.browser_download_url;
+    if (label) el.textContent = label.replace("{name}", asset.name).replace("{size}", size(asset.size));
+  }
+  function meta(id, release, asset) {
+    var el = document.getElementById(id);
+    if (el && release) el.textContent = "Version " + release.tag_name.replace(/^v/, "") + (release.published_at ? " · " + date(release.published_at) : "") + (asset ? " · " + size(asset.size) : "");
+  }
+  function latest(repo) {
+    return fetch("https://api.github.com/repos/Arnav-Dugad/" + repo + "/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
+      .then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+  }
+  function find(release, test) { return release && release.assets ? release.assets.filter(function (a) { return test(a.name); })[0] : null; }
+  latest("UsageNotch-Windows").then(function (release) {
+    var exe = find(release, function (n) { return n === "UsageNotch.exe"; });
+    var zip = find(release, function (n) { return /win-x64\.zip$/i.test(n); });
+    meta("win-meta", release, exe || zip);
+    set("win-exe", exe, "Download UsageNotch.exe");
+    set("hero-windows", exe || zip);
+    set("win-zip", zip, "or the smaller ZIP ({size})");
+  });
+  latest("UsageNotch-Android").then(function (release) {
+    var apk = find(release, function (n) { return /\.apk$/i.test(n); });
+    var link = find(release, function (n) { return /^UsageNotch-Link-.*\.zip$/i.test(n); });
+    var sums = find(release, function (n) { return /^SHA256SUMS/i.test(n); });
+    meta("apk-meta", release, apk);
+    meta("link-meta", release, link);
+    set("apk", apk, "Download {name}");
+    set("hero-android", apk);
+    set("link", link, "Download Link ({size})");
+    set("sums", sums, "SHA-256 checksums");
+  });
+})();
+</script>
+</body>
+</html>
