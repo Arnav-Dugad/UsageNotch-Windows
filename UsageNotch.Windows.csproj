@@ -8,12 +8,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>UsageNotch</AssemblyName>
     <RootNamespace>UsageNotch</RootNamespace>
-    <Version>2.2.0</Version>
-    <FileVersion>2.2.0.0</FileVersion>
-    <AssemblyVersion>2.2.0.0</AssemblyVersion>
+    <Version>2.3.0</Version>
+    <FileVersion>2.3.0.0</FileVersion>
+    <AssemblyVersion>2.3.0.0</AssemblyVersion>
     <Product>UsageNotch</Product>
     <Description>A fluid edge-pinned AI usage monitor for Windows.</Description>
     <ApplicationIcon>Assets\UsageNotch.ico</ApplicationIcon>
+    <!-- Release output and the nested Android repository are not part of this project. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);Release\**;.nuget\**;.dotnet-home\**;.dotnet-sdk\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\UsageNotch-logo.png" />
@@ -26,5 +28,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.8" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Kestrel serves paired phones over pinned HTTPS (Services/Phone). -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 </Project>

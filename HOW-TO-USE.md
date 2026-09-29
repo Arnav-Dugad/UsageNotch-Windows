@@ -1,4 +1,4 @@
-# UsageNotch 2.2.0 — quick start
+# UsageNotch 2.3.0 — quick start
 
 ## Start the updated app
 
@@ -9,6 +9,18 @@
 If you ever lose the dock, just run `UsageNotch.exe` again — a second launch brings the running dock back into view instead of doing nothing.
 
 The tray tooltip and Settings header identify the version. Old builds are in `Release/Archive` for recovery; do not launch those for everyday use. The ZIP `Release/UsageNotch-win-x64.zip` always contains the most recently built release. If Windows startup was already enabled, opening the new release updates its startup path automatically.
+
+## Your usage on your phone (new in 2.3)
+
+Open **Stats & Settings → Phone** (or right-click the tray icon → **Pair a phone…**) and turn on **Share usage with paired phones**. In UsageNotch for Android, tap **Scan QR code** and point the phone at the code. Allow Private networks if Windows Firewall asks. The phone and PC need the same Wi-Fi or a private VPN.
+
+- **Network**: pick the address your phone uses, usually Wi-Fi. WSL/Hyper-V adapters are listed last because phones can't reach them.
+- **Copy pairing code** / **Save pairing file**: alternatives to scanning. Send them only to your own phone.
+- **Internet sync**: paste a GitHub token with *Gists: Read and write* to get readings on your phone away from home. Readings are encrypted before upload; turn it off to delete the gist.
+- **Switch to built-in**: appears when the standalone UsageNotch Link is still running. It closes Link, removes Link from Windows startup and takes over with the same pairing, so your phone keeps working.
+- **Revoke all paired phones** disconnects every phone and changes the keys.
+
+Sharing resumes automatically when UsageNotch starts if it was on before. Actions on this page apply immediately; they aren't part of Save/Cancel.
 
 ## Dock text, clocks and simpler Stats in 2.2
 

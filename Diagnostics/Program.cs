@@ -29,6 +29,7 @@ internal static class Program
             Console.WriteLine("PASS: production public key and signed release executable " + manifest.Version);
             return 0;
         }
+        if (args.Contains("--phone-check")) return PhoneLinkChecks.Run(args.SkipWhile(arg => arg != "--fixtures").Skip(1).FirstOrDefault());
         if (args.Contains("--history-check")) { HistoryUpdateChecks.Run(); return 0; }
         if (args.Length == 3 && args[0] == "--verify-history-copy")
         {

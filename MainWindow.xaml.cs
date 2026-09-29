@@ -1052,11 +1052,12 @@ public partial class MainWindow : Window
         if (!_settings.AutoHide) Untuck();
     }
 
-    public void OpenSettings()
+    public void OpenSettings(bool phone = false)
     {
         if (_settingsWindow is not null)
         {
             if (_settingsWindow.WindowState == WindowState.Minimized) _settingsWindow.WindowState = WindowState.Normal;
+            if (phone) _settingsWindow.ShowPhoneTab();
             _settingsWindow.Activate();
             return;
         }
@@ -1093,6 +1094,7 @@ public partial class MainWindow : Window
             PlayEntrance();
             if (_settings.AutoHide) ScheduleTuck(immediate: false);
         };
+        if (phone) window.ShowPhoneTab();
         window.Show();
     }
 

@@ -24,6 +24,7 @@ public partial class App : System.Windows.Application
     private bool _exiting;
     public AlertService? Alerts => _coordinator?.Alerts;
     public UpdateService Updates { get; } = new();
+    public Services.Phone.PhoneLinkService? Phone { get; private set; }
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -62,6 +63,7 @@ public partial class App : System.Windows.Application
         _coordinator = new UsageCoordinator(settings);
         if (settings.StartWithWindows || StartupService.IsEnabled()) StartupService.Apply(true);
         _coordinator.Alerts.Raised += ShowAlert;
+        StartPhoneLink(settings);
         _mainWindow = new MainWindow(_coordinator, settings);
         _mainWindow.Show();
 
@@ -168,6 +170,7 @@ public partial class App : System.Windows.Application
 
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add("Stats & Settings…", null, (_, _) => _mainWindow?.OpenSettings());
+        menu.Items.Add("Pair a phone…", null, (_, _) => _mainWindow?.OpenSettings(phone: true));
         menu.Items.Add("Quit UsageNotch", null, (_, _) => Shutdown());
         return menu;
     }
@@ -231,6 +234,8 @@ public partial class App : System.Windows.Application
         _settingsSignal?.Dispose();
         if (_coordinator is not null) _coordinator.Alerts.Raised -= ShowAlert;
         _coordinator?.Dispose();
+        // Stop listening before exit so the port is free for the next launch or an update restart.
+        if (Phone is not null) { try { Task.Run(() => Phone.DisposeAsync().AsTask()).Wait(TimeSpan.FromSeconds(3)); } catch { } }
         if (_tray is not null)
         {
             _tray.Visible = false;
@@ -243,6 +248,27 @@ public partial class App : System.Windows.Application
             _instanceMutex.Dispose();
         }
         base.OnExit(e);
+    }
+
+    /// <summary>
+    /// The phone link is built in. It resumes when it was on last time, including in the standalone
+    /// UsageNotch Link it replaces (same identity and preferences), so paired phones keep working.
+    /// </summary>
+    private void StartPhoneLink(AppSettings settings)
+    {
+        if (_coordinator is null) return;
+        try { Phone = new Services.Phone.PhoneLinkService(settings, _coordinator.History); }
+        catch { return; }
+        var phone = Phone;
+        _coordinator.Refreshed += () => phone.Update(_coordinator.Items.Select(item => item.Snapshot).ToList());
+        if (!phone.ResumeOnLaunch) return;
+        _ = Task.Run(async () =>
+        {
+            if (await phone.StartAsync() || !Services.Phone.PhoneLinkService.LegacyLinkRunning() || phone.TrayNoticeShown) return;
+            phone.TrayNoticeShown = true;
+            await Dispatcher.InvokeAsync(() => _tray?.ShowBalloonTip(8000, "Phone sharing is now built in",
+                "UsageNotch Link is still running. Open Settings → Phone and choose Switch to built-in to use one app.", System.Windows.Forms.ToolTipIcon.Info));
+        });
     }
 
     public void ApplySettings(AppSettings settings)

@@ -536,6 +536,64 @@
                             </StackPanel></Border>
                         </StackPanel></ScrollViewer>
                     </TabItem>
+                    <TabItem x:Name="PhoneTab" Header="Phone" Style="{StaticResource NavTab}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6,0,22,4"><StackPanel>
+                            <TextBlock Text="Your usage, on your phone" FontSize="24" FontWeight="SemiBold" Margin="0,6,0,5"/>
+                            <TextBlock Text="UsageNotch for Android shows these limits with rings, home-screen widgets and reset alerts. Your AI sign-ins never leave this PC." Style="{StaticResource SecondaryText}" Margin="0,0,0,14"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <CheckBox x:Name="PhoneShareBox" Content="Share usage with paired phones" Style="{StaticResource Toggle}" Click="PhoneShare_Click"/>
+                                <TextBlock x:Name="PhoneStatus" Style="{StaticResource SecondaryText}" Margin="0,6,0,0"/>
+                                <Button x:Name="PhoneSwitchButton" Content="Switch to built-in" Style="{StaticResource PrimaryButton}" Click="PhoneSwitch_Click" Visibility="Collapsed" Margin="0,12,0,0" HorizontalAlignment="Left"/>
+                            </StackPanel></Border>
+
+                            <TextBlock Text="PAIR A PHONE" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border x:Name="PhoneQrFrame" Background="White" CornerRadius="16" Padding="8" Width="236" Height="236" VerticalAlignment="Top">
+                                    <Grid>
+                                        <Image x:Name="PhoneQr" RenderOptions.BitmapScalingMode="NearestNeighbor" AutomationProperties.Name="Pairing QR code"/>
+                                        <TextBlock x:Name="PhoneQrPlaceholder" Text="Turn on sharing to show your pairing code" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Margin="18" Foreground="#5A6474" FontSize="13"/>
+                                    </Grid>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="20,0,0,0">
+                                    <TextBlock Text="Scan to pair" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Style="{StaticResource SecondaryText}" Margin="0,8,0,0" TextWrapping="Wrap">
+                                        <Run Text="1. On Android, open UsageNotch and tap"/> <Run Text="Scan QR code" FontWeight="SemiBold"/><Run Text="."/>
+                                        <LineBreak/><Run Text="2. Point the phone at this code. That's it."/>
+                                        <LineBreak/><LineBreak/><Run Text="No app yet? Scan the code with the phone's camera. The page that opens lets you download it, then pair in one tap."/>
+                                    </TextBlock>
+                                    <TextBlock Text="Network" Style="{StaticResource SectionTitle}" Margin="0,16,0,8"/>
+                                    <WrapPanel x:Name="PhoneAddresses"/>
+                                    <TextBlock Text="Choose the network your phone uses, usually Wi-Fi. Virtual adapters (WSL, Hyper-V) are listed last." Style="{StaticResource SecondaryText}" FontSize="11" Margin="0,4,0,10"/>
+                                    <WrapPanel>
+                                        <Button x:Name="PhoneCopyButton" Content="Copy pairing code" Style="{StaticResource SecondaryButton}" Click="PhoneCopy_Click" Margin="0,0,8,8"/>
+                                        <Button x:Name="PhoneExportButton" Content="Save pairing file" Style="{StaticResource SecondaryButton}" Click="PhoneExport_Click" Margin="0,0,8,8"/>
+                                        <Button Content="Get the Android app" Style="{StaticResource SecondaryButton}" Click="PhoneDownload_Click" Margin="0,0,8,8"/>
+                                    </WrapPanel>
+                                    <TextBlock Text="The code is a key to your usage readings. Only show or send it to your own phone." Style="{StaticResource SecondaryText}" FontSize="11"/>
+                                </StackPanel>
+                            </Grid></Border>
+
+                            <TextBlock Text="AWAY FROM HOME" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <TextBlock Text="Internet sync (optional)" Style="{StaticResource SectionTitle}"/>
+                                <TextBlock Text="Get readings on mobile data or any Wi-Fi, and keep the latest one after this PC shuts down. Each reading is encrypted here with a key only your paired phone has, then stored in a secret gist in your own GitHub account. GitHub sees only ciphertext." Style="{StaticResource SecondaryText}" Margin="0,6,0,10"/>
+                                <StackPanel x:Name="PhoneSyncSetup">
+                                    <TextBlock Style="{StaticResource SecondaryText}" TextWrapping="Wrap"><Hyperlink Click="PhoneTokenHelp_Click" Foreground="#9BF0CB">Create a GitHub token</Hyperlink><Run Text=" with Account permissions → Gists: Read and write, then paste it here. It's stored encrypted with Windows DPAPI."/></TextBlock>
+                                    <PasswordBox x:Name="PhoneToken" Style="{StaticResource PasswordField}" Height="40" Margin="0,10,0,10"/>
+                                    <Button x:Name="PhoneSyncOnButton" Content="Turn on internet sync" Style="{StaticResource PrimaryButton}" Click="PhoneSyncOn_Click" HorizontalAlignment="Left"/>
+                                </StackPanel>
+                                <Button x:Name="PhoneSyncOffButton" Content="Turn off internet sync" Style="{StaticResource SecondaryButton}" Click="PhoneSyncOff_Click" HorizontalAlignment="Left" Visibility="Collapsed"/>
+                                <TextBlock x:Name="PhoneSyncStatus" Style="{StaticResource SecondaryText}" Margin="0,10,0,0"/>
+                            </StackPanel></Border>
+
+                            <TextBlock Text="SECURITY" Style="{StaticResource GroupLabel}"/>
+                            <Border Style="{StaticResource Card}"><StackPanel>
+                                <TextBlock Text="Phones connect over HTTPS pinned to this PC's own certificate, with a random 256-bit key. Revoking disconnects every paired phone and changes the internet sync key." Style="{StaticResource SecondaryText}" Margin="0,0,0,12"/>
+                                <Button Content="Revoke all paired phones" Style="{StaticResource SecondaryButton}" Click="PhoneRevoke_Click" HorizontalAlignment="Left"/>
+                            </StackPanel></Border>
+                        </StackPanel></ScrollViewer>
+                    </TabItem>
                     <TabItem Header="Updates" Style="{StaticResource NavTab}">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6,0,22,4"><StackPanel>
                             <TextBlock Text="STAY CURRENT" Style="{StaticResource GroupLabel}"/>

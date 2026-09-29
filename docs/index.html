@@ -49,6 +49,7 @@ h1 { font-size: clamp(36px, 6vw, 60px); line-height: 1.04; font-weight: 300; let
 .btn svg { width: 18px; height: 18px; flex: none; }
 .hero-art { position: relative; display: flex; justify-content: center; }
 .hero-art img { width: min(300px, 80%); border-radius: 34px; box-shadow: var(--shadow); border: 1px solid var(--line); }
+img.wide { width: 100%; height: auto; border-radius: 24px; box-shadow: var(--shadow); display: block; }
 .offline-grid { display: grid; grid-template-columns: 1fr 250px; gap: 24px; align-items: start; }
 .offline-grid figure { margin: 0; }
 .offline-grid img { width: 100%; height: auto; border-radius: 26px; box-shadow: var(--shadow); }
@@ -94,7 +95,7 @@ footer a { color: var(--muted); }
 <div class="wrap">
   <header class="top">
     <a class="brand" href="#"><img src="logo.png" alt="" width="36" height="36">UsageNotch</a>
-    <nav aria-label="Page sections"><a href="#download">Download</a><a href="#setup">Setup</a><a href="#offline">Offline</a><a href="#faq">FAQ</a></nav>
+    <nav aria-label="Page sections"><a href="#download">Download</a><a href="#setup">Setup</a><a href="#widgets">Widgets</a><a href="#offline">Offline</a><a href="#faq">FAQ</a></nav>
   </header>
 
   <main>
@@ -119,13 +120,13 @@ footer a { color: var(--muted); }
 
     <section id="download" aria-labelledby="download-title">
       <h2 id="download-title">Download</h2>
-      <p class="sub">Start with the Windows app: it reads your limits from the accounts you're already signed in to. Add the Android app and Link to carry them to your phone.</p>
-      <div class="notice"><strong>If the Android app closed as soon as you opened it,</strong> install Android 1.1.0 or newer. It fixes the startup crash in 1.0.0 and 1.0.1 and installs over them.</div>
+      <p class="sub">Start with the Windows app: it reads your limits from the accounts you're already signed in to. Add the Android app to carry them to your phone; the Windows app shares with it directly.</p>
+      <div class="notice"><strong>If the Android app closed as soon as you opened it,</strong> install the latest version. The startup crash in 1.0.0 and 1.0.1 was fixed in 1.1, and updates install over earlier versions.</div>
       <div class="cards">
         <article class="card">
           <span class="tag">Windows 10 / 11 · x64</span>
           <h3>UsageNotch for Windows</h3>
-          <p>A dock pinned to your screen edge with live rings, reset countdowns, alerts and full usage history. No installer and no .NET needed.</p>
+          <p>A dock pinned to your screen edge with live rings, reset countdowns, alerts, full usage history and built-in phone sharing. No installer and no .NET needed.</p>
           <div class="meta" id="win-meta">Latest release on GitHub</div>
           <a class="btn primary" id="win-exe" href="https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest">Download UsageNotch.exe</a>
           <a class="alt" id="win-zip" href="https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest">or the smaller ZIP</a>
@@ -133,58 +134,61 @@ footer a { color: var(--muted); }
         <article class="card">
           <span class="tag">Android 9 or newer</span>
           <h3>UsageNotch for Android</h3>
-          <p>Your limits in your pocket: animated rings, home-screen widgets, reset alerts and an offline mode. Open the APK on your phone to install it.</p>
+          <p>The desktop dock in your pocket: the same rings and logos, home-screen widgets in any size, reset alerts and an offline mode. Open the APK on your phone to install it.</p>
           <div class="meta" id="apk-meta">Latest release on GitHub</div>
           <a class="btn primary" id="apk" href="https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest">Download the APK</a>
-          <a class="alt" href="https://github.com/Arnav-Dugad/UsageNotch-Android#set-up-in-five-minutes">Setup guide</a>
+          <a class="alt" id="sums" href="https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest">SHA-256 checksums</a>
         </article>
         <article class="card">
-          <span class="tag">Windows · for the Android app</span>
-          <h3>UsageNotch Link</h3>
-          <p>Pairs your phone with your PC over Wi-Fi, with optional end-to-end encrypted internet sync. Runs quietly in the notification area.</p>
-          <div class="meta" id="link-meta">Latest release on GitHub</div>
-          <a class="btn primary" id="link" href="https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest">Download Link</a>
-          <a class="alt" id="sums" href="https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest">SHA-256 checksums</a>
+          <span class="tag">Pairing</span>
+          <h3>One scan. That's it.</h3>
+          <p>On your PC, open UsageNotch → Settings → Phone and turn on sharing. On your phone, tap <em>Scan QR code</em>. No extra app, no files to copy. Scanning with the phone's camera works too, even before the app is installed.</p>
+          <a class="btn" href="#setup">How to set up</a>
+          <a class="alt" href="https://github.com/Arnav-Dugad/UsageNotch-Android/releases/tag/v1.1.0">Still on Windows 2.2? Get UsageNotch Link</a>
         </article>
       </div>
     </section>
 
     <section id="setup" aria-labelledby="setup-title">
-      <h2 id="setup-title">Set up in five minutes</h2>
+      <h2 id="setup-title">Set up in two minutes</h2>
       <p class="sub">You only need the phone steps if you want the Android app.</p>
       <ol class="steps">
         <li><strong>Run UsageNotch on Windows.</strong> Open <code>UsageNotch.exe</code>. If SmartScreen appears, choose More info → Run anyway. Connect Claude, Codex, Gemini or Cursor in Settings.</li>
-        <li><strong>Start UsageNotch Link.</strong> Extract the Link ZIP, run it and click <em>Start secure link</em>. Allow Private networks if Windows Firewall asks, then click <em>Copy pairing code</em>.</li>
-        <li><strong>Pair your phone.</strong> Install the APK, open UsageNotch and tap <em>Paste pairing code</em>. Add a widget from the Widgets tab and turn on Reset alerts in Settings.</li>
+        <li><strong>Turn on phone sharing.</strong> Open Settings → Phone and switch on <em>Share usage with paired phones</em>. Allow Private networks if Windows Firewall asks. A QR code appears.</li>
+        <li><strong>Scan it.</strong> Install the APK, open UsageNotch and tap <em>Scan QR code</em>. Then add a widget from the Widgets tab and turn on Reset alerts in Settings.</li>
       </ol>
+    </section>
+
+    <section id="widgets" aria-labelledby="widgets-title">
+      <h2 id="widgets-title">Widgets in any size</h2>
+      <p class="sub">Resize freely: a single ring, a dock row or column like the desktop, or the full view with every limit. Rings use the desktop's colours and the real Claude, OpenAI, Gemini and Cursor marks.</p>
+      <img class="wide" src="widget-sizes.png" width="1100" height="822" loading="lazy" alt="UsageNotch widgets at several sizes: a full overview with rings and limit bars, a Codex focus widget with a large dual ring, a dock row, a two-ring square, single rings and a vertical dock column">
     </section>
 
     <section id="offline" aria-labelledby="offline-title">
       <h2 id="offline-title">Keeps working when your PC is off</h2>
       <p class="sub">Your sign-ins stay on Windows, so new usage is measured there. When the PC is off or you're away, the phone stays useful and never pretends.</p>
-      <div class="offline-grid">
       <div class="features">
         <div class="feature"><h3>Saved readings, live countdowns</h3><p>The app and widgets keep your last readings, marked with their age, and count down to each reset. The status says <em>PC offline</em>, not an error.</p></div>
-        <div class="feature"><h3>Renewed, right on time</h3><p>When a reset time passes, the window shows <em>Renewed</em>, and with Reset alerts on your phone notifies you. It needs no connection at all.</p></div>
-        <div class="feature"><h3>Optional encrypted internet sync</h3><p>Link can upload each reading to a secret gist in your own GitHub account, encrypted with a key only your paired phone has. Get readings on mobile data, and keep the last one after the PC shuts down.</p></div>
-        <div class="feature"><h3>Private by design</h3><p>No accounts, ads, analytics or tracking. AI tokens never leave Windows, and Wi-Fi pairing uses HTTPS pinned to your PC's own certificate.</p></div>
-      </div>
-      <figure><img src="home-widget-offline.png" width="456" height="756" loading="lazy" alt="UsageNotch home-screen widget while the PC is offline: saved Claude readings and a Codex window marked Renewed"><figcaption>The widget with the PC offline</figcaption></figure>
+        <div class="feature"><h3>Renewed, right on time</h3><p>When a reset time passes, the limit shows <em>Renewed</em>, and with Reset alerts on your phone notifies you. It needs no connection at all.</p></div>
+        <div class="feature"><h3>Optional encrypted internet sync</h3><p>Windows can upload each reading to a secret gist in your own GitHub account, encrypted with a key only your paired phone has. Get readings on mobile data, and keep the last one after the PC shuts down.</p></div>
+        <div class="feature"><h3>Private by design</h3><p>No accounts, ads, analytics or tracking. AI sign-ins never leave Windows, and Wi-Fi pairing uses HTTPS pinned to your PC's own certificate.</p></div>
       </div>
     </section>
 
     <section id="faq" aria-labelledby="faq-title">
       <h2 id="faq-title">Questions</h2>
-      <details><summary>Windows says “Windows protected your PC”</summary><p>UsageNotch and Link aren't code-signed with a paid certificate yet, so SmartScreen doesn't recognize them. Choose <em>More info → Run anyway</em>. You can compare the download with the SHA-256 checksums published on each release.</p></details>
+      <details><summary>Windows says “Windows protected your PC”</summary><p>UsageNotch isn't code-signed with a paid certificate yet, so SmartScreen doesn't recognize it. Choose <em>More info → Run anyway</em>. You can compare the download with the SHA-256 checksums published on each release.</p></details>
       <details><summary>Android won't install the APK</summary><p>Android asks you to allow installs from the app you downloaded it with, such as Chrome or Files. Allow it once, then open the APK again. Updates install over the existing app and keep your pairing.</p></details>
-      <details><summary>The phone says “Couldn't reach your PC”</summary><p>Start the secure link in UsageNotch Link, choose your Wi-Fi address (not <code>vEthernet</code> or WSL), keep both devices on the same Wi-Fi or a private VPN such as Tailscale, and allow Link on Private networks in Windows Firewall.</p></details>
+      <details><summary>The phone says “Couldn't reach your PC”</summary><p>In UsageNotch on Windows, open Settings → Phone, check sharing is on and your Wi-Fi address is selected (not <code>vEthernet</code> or WSL). Keep both devices on the same Wi-Fi or a private VPN such as Tailscale, and allow UsageNotch on Private networks in Windows Firewall.</p></details>
+      <details><summary>I used UsageNotch Link before. What now?</summary><p>Update UsageNotch for Windows to 2.3 (it updates itself), open Settings → Phone and choose <em>Switch to built-in</em>. Your phone stays paired: same key, same certificate. Link is closed and removed from startup.</p></details>
       <details><summary>Can the phone check my usage without the PC?</summary><p>Not new usage: only UsageNotch on Windows signs in to Claude, ChatGPT, Gemini and Cursor, and your credentials aren't copied to the phone. Saved readings, countdowns, Renewed states and reset alerts all work offline, and internet sync gives you the latest reading from anywhere.</p></details>
-      <details><summary>Which providers are supported?</summary><p>Claude (Claude Code sign-in), Codex (ChatGPT sign-in), Cursor, Gemini Code Assist where Google still allows its CLI sign-in, and month-to-date API spend for OpenAI and Anthropic with Admin keys. Each provider's usage windows are shown separately.</p></details>
+      <details><summary>Which providers are supported?</summary><p>Claude (Claude Code sign-in), Codex (ChatGPT sign-in), Cursor, Gemini Code Assist where Google still allows its CLI sign-in, and month-to-date API spend for OpenAI and Anthropic with Admin keys. Each provider's limits are shown separately.</p></details>
     </section>
   </main>
 
   <footer>
-    <p>Source code: <a href="https://github.com/Arnav-Dugad/UsageNotch-Windows">UsageNotch for Windows</a> · <a href="https://github.com/Arnav-Dugad/UsageNotch-Android">UsageNotch for Android and Link</a> · <a href="https://github.com/Arnav-Dugad/UsageNotch-Android/issues">Report a problem</a></p>
+    <p>Source code: <a href="https://github.com/Arnav-Dugad/UsageNotch-Windows">UsageNotch for Windows</a> · <a href="https://github.com/Arnav-Dugad/UsageNotch-Android">UsageNotch for Android</a> · <a href="https://github.com/Arnav-Dugad/UsageNotch-Android/issues">Report a problem</a></p>
     <p>Independent community project. Not affiliated with Anthropic, OpenAI, Google, Cursor or GitHub. Android screens show sample data.</p>
   </footer>
 </div>
@@ -218,13 +222,10 @@ footer a { color: var(--muted); }
   });
   latest("UsageNotch-Android").then(function (release) {
     var apk = find(release, function (n) { return /\.apk$/i.test(n); });
-    var link = find(release, function (n) { return /^UsageNotch-Link-.*\.zip$/i.test(n); });
     var sums = find(release, function (n) { return /^SHA256SUMS/i.test(n); });
     meta("apk-meta", release, apk);
-    meta("link-meta", release, link);
     set("apk", apk, "Download {name}");
     set("hero-android", apk);
-    set("link", link, "Download Link ({size})");
     set("sums", sums, "SHA-256 checksums");
   });
 })();

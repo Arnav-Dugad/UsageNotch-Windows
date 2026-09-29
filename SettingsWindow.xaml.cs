@@ -37,6 +37,7 @@ public partial class SettingsWindow : Window
             currentApp.Updates.Changed += UpdatesChanged;
             Closed += (_, _) => currentApp.Updates.Changed -= UpdatesChanged;
         }
+        InitPhone();
         VersionLine.Text = "Your usage. Your way.  ·  " +
             (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version is { } version ? $"{version.Major}.{version.Minor}" : "1.6");
 

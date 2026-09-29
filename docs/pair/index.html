@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>Pair UsageNotch</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+<style>
+:root { --bg:#0a0c11; --card:#151922; --raised:#1e232d; --line:rgba(255,255,255,.12); --ink:#f2f4f8; --muted:#a9b1bf; --mint:#ace8da; --mint-ink:#07231f; color-scheme:dark; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#f2f4f8; --card:#fff; --raised:#f1f3f6; --line:rgba(11,13,18,.12); --ink:#12151b; --muted:#5b6371; --mint:#1c7c6c; --mint-ink:#fff; color-scheme:light; } }
+* { box-sizing:border-box; }
+body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--ink); font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:20px; }
+main { width:100%; max-width:430px; background:var(--card); border:1px solid var(--line); border-radius:28px; padding:28px 24px; text-align:center; }
+img.logo { width:64px; height:64px; border-radius:18px; }
+h1 { font-weight:400; font-size:26px; margin:14px 0 6px; letter-spacing:-.02em; }
+p { color:var(--muted); margin:0 0 18px; }
+.btn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:15px 18px; border-radius:999px; font-weight:600; text-decoration:none; font-size:16px; margin-top:10px; border:1px solid var(--line); color:var(--ink); background:var(--raised); }
+.btn.primary { background:var(--mint); color:var(--mint-ink); border-color:transparent; }
+.steps { text-align:left; background:var(--raised); border-radius:18px; padding:14px 16px; margin:18px 0 6px; color:var(--muted); font-size:14px; }
+.steps b { color:var(--ink); }
+small { display:block; color:var(--muted); font-size:12.5px; margin-top:16px; }
+[hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="../logo.png" alt="">
+  <div id="ready" hidden>
+    <h1>Pair with your PC</h1>
+    <p id="pc">Your PC is ready to share usage with this phone.</p>
+    <a class="btn primary" id="open" href="#">Open in UsageNotch</a>
+    <a class="btn" id="get" href="https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest">Get the Android app first</a>
+    <div class="steps"><b>New here?</b> Tap <b>Get the Android app first</b>, open the downloaded APK to install it, then come back to this tab and tap <b>Open in UsageNotch</b>.</div>
+  </div>
+  <div id="missing" hidden>
+    <h1>Scan the code on your PC</h1>
+    <p>Open UsageNotch on Windows → Settings → Phone, turn on sharing, and scan the QR code with this phone's camera or the UsageNotch app.</p>
+    <a class="btn" href="../#download">Downloads</a>
+  </div>
+  <small>The pairing code stays on this phone: it's in the part of the address browsers never send to a server, and this page removes it from the address bar right away. No analytics, no tracking.</small>
+</main>
+<script>
+(function () {
+  var match = /UN[12]\.[A-Za-z0-9_-]+/.exec(location.hash || "");
+  // Keep the code out of the address bar and browser history.
+  try { history.replaceState(null, "", location.pathname); } catch (e) {}
+  if (!match) { document.getElementById("missing").hidden = false; return; }
+  var code = match[0];
+  document.getElementById("ready").hidden = false;
+  // Show the PC's name from the compact code's last field, without trusting it for anything.
+  try {
+    if (code.indexOf("UN2.") === 0) {
+      var raw = atob(code.slice(4).replace(/-/g, "+").replace(/_/g, "/"));
+      var name = "";
+      // The name is the final length-prefixed field; take the shortest length that matches its prefix byte.
+      for (var len = 1; len <= 60 && len < raw.length; len++) { if (raw.charCodeAt(raw.length - len - 1) === len) { name = raw.slice(raw.length - len); break; } }
+      if (name && /^[\x20-\x7E]{1,60}$/.test(name)) document.getElementById("pc").textContent = name + " is ready to share usage with this phone.";
+    }
+  } catch (e) {}
+  var android = /Android/i.test(navigator.userAgent);
+  var fallback = encodeURIComponent("https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest");
+  var open = document.getElementById("open");
+  open.href = android
+    ? "intent://pair/" + code + "#Intent;scheme=usagenotch;package=io.github.arnavdugad.usagenotch;S.browser_fallback_url=" + fallback + ";end"
+    : "usagenotch://pair/" + code;
+  if (!android) open.insertAdjacentHTML("afterend", "<small>Open this page on your Android phone to pair.</small>");
+  fetch("https://api.github.com/repos/Arnav-Dugad/UsageNotch-Android/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (release) {
+      var apk = release && release.assets ? release.assets.filter(function (a) { return /\.apk$/i.test(a.name); })[0] : null;
+      if (apk) { var get = document.getElementById("get"); get.href = apk.browser_download_url; get.textContent = "Get the Android app first (" + release.tag_name.replace(/^v/, "") + ")"; }
+    }).catch(function () {});
+})();
+</script>
+</body>
+</html>

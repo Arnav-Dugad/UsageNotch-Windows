@@ -1,0 +1,10 @@
+# Verification 2.3.0
+
+Checked on September 29, 2026 on the development PC (Windows 11, x64).
+
+- **Existing checks:** all 18 `--check` diagnostics pass, including settings live-edit/cancel restoration, history identity separation, updater signature and tamper rejection, and 1,728 rendered dock layouts.
+- **Phone link checks (`--phone-check`, 29 checks):** DPAPI identity persistence; the pairing file, `UN1` code and compact `UN2` QR code carry the same address, key and certificate hash. The QR URL keeps the code in the fragment, never contains the GitHub token, and stays at 65 modules across with internet sync. Revoking rotates the sync key, and Wi-Fi is ranked before WSL/Hyper-V. Snapshots keep every field Android 1.1 requires; carry desktop labels, dock roles, extras without percentages, 24-hour points from the dock's own history, and account names only when the dock shows them. Providers needing sign-in keep their message. The pinned HTTPS server rejects unauthenticated requests, query credentials, other routes and revoked keys. Sharing starts, is remembered, explains a busy port, and stops. Internet sync creates a secret gist with ciphertext only, uploads are throttled, the upload decrypts to the current readings, and turning sync off deletes the gist.
+- **Live test:** 2.3.0 started while the standalone UsageNotch Link 1.1.0 held port 43187 and reported it. UI Automation opened Settings → Phone and clicked **Switch to built-in**. Link exited, 2.3.0 took the port with the same identity, and the status read "Sharing with paired phones on this network". The on-screen QR code decoded from a screenshot (OpenCV) to the expected pairing URL.
+- **With Android:** an Android 16 emulator paired through the QR code's link and showed live readings with the desktop's labels and account name. Android 1.1.0 paired by pasted code and read the new snapshot; updating it to 1.2.0 kept the pairing. Fixtures written by `--phone-check` are decoded by the Android unit tests.
+
+Not verified here: Windows Firewall prompts on other PCs, networks other than this PC's Wi-Fi, and the phone camera path from the QR page on a physical device.
