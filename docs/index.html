@@ -134,7 +134,7 @@ footer a { color: var(--muted); }
         <article class="card">
           <span class="tag">Android 9 or newer</span>
           <h3>UsageNotch for Android</h3>
-          <p>The desktop dock in your pocket: the same rings and logos, home-screen widgets in any size, reset alerts and an offline mode. Open the APK on your phone to install it.</p>
+          <p>The desktop dock in your pocket: the same rings and logos, widgets in any size, a live countdown, usage alerts, a Quick Settings tile, 30-day history and an offline mode. Open the APK on your phone to install it.</p>
           <div class="meta" id="apk-meta">Latest release on GitHub</div>
           <a class="btn primary" id="apk" href="https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest">Download the APK</a>
           <a class="alt" id="sums" href="https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest">SHA-256 checksums</a>
@@ -155,7 +155,7 @@ footer a { color: var(--muted); }
       <ol class="steps">
         <li><strong>Run UsageNotch on Windows.</strong> Open <code>UsageNotch.exe</code>. If SmartScreen appears, choose More info → Run anyway. Connect Claude, Codex, Gemini or Cursor in Settings.</li>
         <li><strong>Turn on phone sharing.</strong> Open Settings → Phone and switch on <em>Share usage with paired phones</em>. Allow Private networks if Windows Firewall asks. A QR code appears.</li>
-        <li><strong>Scan it.</strong> Install the APK, open UsageNotch and tap <em>Scan QR code</em>. Then add a widget from the Widgets tab and turn on Reset alerts in Settings.</li>
+        <li><strong>Scan it.</strong> Install the APK, open UsageNotch and tap <em>Scan QR code</em>. Then add a widget or the Quick Settings tile from the Widgets tab, and turn on Live countdown or Usage alerts in Settings.</li>
       </ol>
     </section>
 
@@ -171,7 +171,7 @@ footer a { color: var(--muted); }
       <div class="features">
         <div class="feature"><h3>Saved readings, live countdowns</h3><p>The app and widgets keep your last readings, marked with their age, and count down to each reset. The status says <em>PC offline</em>, not an error.</p></div>
         <div class="feature"><h3>Renewed, right on time</h3><p>When a reset time passes, the limit shows <em>Renewed</em>, and with Reset alerts on your phone notifies you. It needs no connection at all.</p></div>
-        <div class="feature"><h3>Optional encrypted internet sync</h3><p>Windows can upload each reading to a secret gist in your own GitHub account, encrypted with a key only your paired phone has. Get readings on mobile data, and keep the last one after the PC shuts down.</p></div>
+        <div class="feature"><h3>Optional encrypted internet sync</h3><p>Windows can upload each reading to a secret gist in your own GitHub account, encrypted with a key only your paired phone has. Turning it on takes two clicks, and your phone switches over by itself on your Wi-Fi. Get readings on mobile data, and keep the last one after the PC shuts down.</p></div>
         <div class="feature"><h3>Private by design</h3><p>No accounts, ads, analytics or tracking. AI sign-ins never leave Windows, and Wi-Fi pairing uses HTTPS pinned to your PC's own certificate.</p></div>
       </div>
     </section>
@@ -181,8 +181,8 @@ footer a { color: var(--muted); }
       <details><summary>Windows says “Windows protected your PC”</summary><p>UsageNotch isn't code-signed with a paid certificate yet, so SmartScreen doesn't recognize it. Choose <em>More info → Run anyway</em>. You can compare the download with the SHA-256 checksums published on each release.</p></details>
       <details><summary>Android won't install the APK</summary><p>Android asks you to allow installs from the app you downloaded it with, such as Chrome or Files. Allow it once, then open the APK again. Updates install over the existing app and keep your pairing.</p></details>
       <details><summary>The phone says “Couldn't reach your PC”</summary><p>In UsageNotch on Windows, open Settings → Phone, check sharing is on and your Wi-Fi address is selected (not <code>vEthernet</code> or WSL). Keep both devices on the same Wi-Fi or a private VPN such as Tailscale, and allow UsageNotch on Private networks in Windows Firewall.</p></details>
-      <details><summary>I used UsageNotch Link before. What now?</summary><p>Update UsageNotch for Windows to 2.3 (it updates itself), open Settings → Phone and choose <em>Switch to built-in</em>. Your phone stays paired: same key, same certificate. Link is closed and removed from startup.</p></details>
-      <details><summary>Can the phone check my usage without the PC?</summary><p>Not new usage: only UsageNotch on Windows signs in to Claude, ChatGPT, Gemini and Cursor, and your credentials aren't copied to the phone. Saved readings, countdowns, Renewed states and reset alerts all work offline, and internet sync gives you the latest reading from anywhere.</p></details>
+      <details><summary>I used UsageNotch Link before. What now?</summary><p>Update UsageNotch for Windows to 2.3 or later (it updates itself), open Settings → Phone and choose <em>Switch to built-in</em>. Your phone stays paired: same key, same certificate. Link is closed and removed from startup.</p></details>
+      <details><summary>Can the phone check my usage without the PC?</summary><p>Not new usage: only UsageNotch on Windows signs in to Claude, ChatGPT, Gemini and Cursor, and your credentials aren't copied to the phone. Saved readings, countdowns, Renewed states, history and reset alerts all work offline, and internet sync gives you the latest reading from anywhere.</p></details>
       <details><summary>Which providers are supported?</summary><p>Claude (Claude Code sign-in), Codex (ChatGPT sign-in), Cursor, Gemini Code Assist where Google still allows its CLI sign-in, and month-to-date API spend for OpenAI and Anthropic with Admin keys. Each provider's limits are shown separately.</p></details>
     </section>
   </main>

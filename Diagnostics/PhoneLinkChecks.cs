@@ -121,6 +121,42 @@ internal static class PhoneLinkChecks
 
         var key = Enumerable.Range(0, 32).Select(i => (byte)i).ToArray();
         Check(RelayCrypto.Open(key, RelayCrypto.Seal(key, text)) == text, "relay envelope round-trips");
+
+        // 30-day summaries: consumption counts only increases between continuous readings.
+        var noon = new DateTimeOffset(now.ToLocalTime().Date.AddHours(12), now.ToLocalTime().Offset);
+        var series = new List<UsagePoint>
+        {
+            new(noon.AddDays(-2), .10, null, "a"), new(noon.AddDays(-2).AddMinutes(10), .30, null, "a"),     // +0.20 two days ago
+            new(noon.AddDays(-1), .40, null, "b"), new(noon.AddDays(-1).AddMinutes(10), .50, null, "b"),     // +0.10 yesterday
+            new(noon.AddDays(-1).AddHours(3), .90, null, "b"),                                                // 3-hour gap: not counted
+            new(noon, .05, null, "c"), new(noon.AddMinutes(5), .15, null, "c"), new(noon.AddMinutes(10), .12, null, "c"), // +0.10 today; a drop adds nothing
+        };
+        var summary = PhoneSnapshot.Aggregate("five_hour", "Current session", series, noon.AddMinutes(20));
+        double? DayUsed(int ago) => summary.Days[^(ago + 1)].Used;
+        Check(summary.Days.Count == 30 && Math.Abs(DayUsed(2)!.Value - .2) < 1e-6 && Math.Abs(DayUsed(1)!.Value - .1) < 1e-6 && Math.Abs(DayUsed(0)!.Value - .1) < 1e-6 && DayUsed(3) == null,
+            "daily consumption adds increases only, skips gaps and drops, and leaves unobserved days empty");
+        var cell = (int)noon.ToLocalTime().DayOfWeek * 24 + noon.ToLocalTime().Hour;
+        Check(summary.Heat.Count == 168 && Math.Abs(summary.Heat[cell] - .1) < 1e-6 && summary.Observed[cell] == 1 && summary.Streak == 3, "heatmap cells, observed hours and the 3-day streak are correct");
+
+        // Forecast from the dock's own estimator, with the limit time when it comes before the reset.
+        var climbing = Enumerable.Range(0, 7).Select(i => new UsagePoint(now.AddMinutes(-30 + i * 5), .50 + i * .05, now.AddHours(5), "p")).ToList();
+        var forecast = PhoneSnapshot.ForecastFor(climbing, SnapshotStatus.Ok, now, settings)!;
+        Check(forecast.LimitAt is { } limitAt && limitAt > now.ToUnixTimeMilliseconds() && limitAt < now.AddHours(5).ToUnixTimeMilliseconds() && forecast.Rate > 50, "forecast reports when a fast pace reaches the limit before the reset");
+
+        // Paired phones learn internet sync settings over the local link; relay uploads never carry the key.
+        var gh = new FakeGitHub();
+        await using (var linked = new PhoneLinkService(settings, history, Path.Combine(directory, "linked"), Path.Combine(directory, "none.db"), new RelayPublisher(gh, new Uri("https://github.test/"))))
+        {
+            linked.EnsureIdentity(); linked.Update([Claude(now, .01)]);
+            using (var off = JsonDocument.Parse(linked.BuildJson())) Check(off.RootElement.GetProperty("relayState").GetString() == "off" && !off.RootElement.TryGetProperty("relay", out _), "local snapshot says internet sync is off");
+            await linked.EnableSyncAsync("ghp_" + new string('y', 36));
+            using (var on = JsonDocument.Parse(linked.BuildJson()))
+                Check(on.RootElement.GetProperty("relayState").GetString() == "on" && on.RootElement.GetProperty("relay").GetProperty("key").GetString() == linked.Identity!.Sync!.Key, "local snapshot hands the sync address and key to paired phones");
+            await linked.UploadAsync(force: true);
+            var uploaded = JsonDocument.Parse(gh.Requests[^1].Body).RootElement.GetProperty("files").GetProperty(RelayPublisher.FileName).GetProperty("content").GetString()!;
+            var plain = RelayCrypto.Open(linked.Identity!.Sync!.KeyBytes, uploaded);
+            Check(!plain.Contains(linked.Identity.Sync.Key) && !plain.Contains("relayState") && plain.Contains("\"history\""), "uploads include summaries but never the sync key");
+        }
     }
 
     private sealed class FakeGitHub : HttpMessageHandler

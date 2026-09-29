@@ -1,4 +1,4 @@
-# UsageNotch 2.3.0 — quick start
+# UsageNotch 2.4.0 — quick start
 
 ## Start the updated app
 
@@ -10,13 +10,14 @@ If you ever lose the dock, just run `UsageNotch.exe` again — a second launch b
 
 The tray tooltip and Settings header identify the version. Old builds are in `Release/Archive` for recovery; do not launch those for everyday use. The ZIP `Release/UsageNotch-win-x64.zip` always contains the most recently built release. If Windows startup was already enabled, opening the new release updates its startup path automatically.
 
-## Your usage on your phone (new in 2.3)
+## Your usage on your phone
 
 Open **Stats & Settings → Phone** (or right-click the tray icon → **Pair a phone…**) and turn on **Share usage with paired phones**. In UsageNotch for Android, tap **Scan QR code** and point the phone at the code. Allow Private networks if Windows Firewall asks. The phone and PC need the same Wi-Fi or a private VPN.
 
 - **Network**: pick the address your phone uses, usually Wi-Fi. WSL/Hyper-V adapters are listed last because phones can't reach them.
 - **Copy pairing code** / **Save pairing file**: alternatives to scanning. Send them only to your own phone.
-- **Internet sync**: paste a GitHub token with *Gists: Read and write* to get readings on your phone away from home. Readings are encrypted before upload; turn it off to delete the gist.
+- **Internet sync** (new in 2.4: two clicks): choose **Turn on internet sync**. GitHub opens with a token already set up for gists only; click **Generate token**, then the copy icon. UsageNotch picks the token up from the clipboard, clears the clipboard and turns sync on. GitHub tokens expire after the time you choose on that page; when one does, UsageNotch says so and you turn sync on again. Your phone switches over by itself the next time it's on the same Wi-Fi; no new code to scan. Readings are encrypted before upload; turn it off to delete the gist. **Paste a token instead** still works.
+- **History and pace on the phone** (new in 2.4): the phone's History tab shows 30 days of daily usage, your streak and busiest hours, and each limit shows the dock's pace forecast. These come from the history UsageNotch already keeps on this PC.
 - **Switch to built-in**: appears when the standalone UsageNotch Link is still running. It closes Link, removes Link from Windows startup and takes over with the same pairing, so your phone keeps working.
 - **Revoke all paired phones** disconnects every phone and changes the keys.
 

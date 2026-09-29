@@ -97,19 +97,68 @@ public partial class SettingsWindow
     }
 
     private void PhoneDownload_Click(object sender, RoutedEventArgs e) => OpenLink("https://arnav-dugad.github.io/UsageNotch-Windows/#download");
-    private void PhoneTokenHelp_Click(object sender, RoutedEventArgs e) => OpenLink("https://github.com/settings/personal-access-tokens/new");
-    private static void OpenLink(string url) { try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { } }
+    private void PhoneTokenHelp_Click(object sender, RoutedEventArgs e) => OpenLink(TokenPage);
 
-    private async void PhoneSyncOn_Click(object sender, RoutedEventArgs e)
+    // A classic token page pre-filled with a name and only the gist scope.
+    private const string TokenPage = "https://github.com/settings/tokens/new?description=UsageNotch%20internet%20sync&scopes=gist";
+    private static readonly System.Text.RegularExpressions.Regex TokenPattern = new(@"^(ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{50,120})$");
+    private System.Windows.Threading.DispatcherTimer? _tokenWatch;
+    private DateTime _tokenWatchEnds;
+    private string? _clipboardAtStart;
+
+    /// <summary>
+    /// Opens GitHub's token page and, for five minutes, watches the clipboard for a newly copied GitHub token.
+    /// Only a value that changed after the button was pressed and looks exactly like a token is used; it is removed from the clipboard straight away.
+    /// </summary>
+    private void PhoneSyncEasy_Click(object sender, RoutedEventArgs e)
+    {
+        StopTokenWatch();
+        try { _clipboardAtStart = System.Windows.Clipboard.ContainsText() ? System.Windows.Clipboard.GetText() : null; } catch { _clipboardAtStart = null; }
+        OpenLink(TokenPage);
+        _tokenWatchEnds = DateTime.UtcNow.AddMinutes(5);
+        _tokenWatch = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+        _tokenWatch.Tick += TokenWatch_Tick;
+        _tokenWatch.Start();
+        PhoneSyncOnButton.IsEnabled = false; PhoneSyncCancelButton.Visibility = Visibility.Visible;
+        PhoneSyncStatus.Text = "Waiting for your token… On GitHub, choose how long it lasts (sync stops when it expires), click Generate token, then the copy icon next to the new token.";
+        Closed -= StopTokenWatchOnClose; Closed += StopTokenWatchOnClose;
+    }
+    private void StopTokenWatchOnClose(object? sender, EventArgs e) => StopTokenWatch();
+    private void PhoneSyncCancel_Click(object sender, RoutedEventArgs e) { StopTokenWatch(); PhoneSyncStatus.Text = "Internet sync wasn't turned on."; }
+    private void StopTokenWatch()
+    {
+        if (_tokenWatch != null) { _tokenWatch.Stop(); _tokenWatch.Tick -= TokenWatch_Tick; _tokenWatch = null; }
+        _clipboardAtStart = null;
+        PhoneSyncOnButton.IsEnabled = true; PhoneSyncCancelButton.Visibility = Visibility.Collapsed;
+    }
+    private async void TokenWatch_Tick(object? sender, EventArgs e)
+    {
+        if (DateTime.UtcNow > _tokenWatchEnds) { StopTokenWatch(); PhoneSyncStatus.Text = "Stopped waiting for a token. Click Turn on internet sync to try again."; return; }
+        string text;
+        try { if (!System.Windows.Clipboard.ContainsText()) return; text = System.Windows.Clipboard.GetText().Trim(); }
+        catch { return; } // Another app may hold the clipboard for a moment.
+        if (text == _clipboardAtStart?.Trim() || !TokenPattern.IsMatch(text)) return;
+        StopTokenWatch();
+        try { System.Windows.Clipboard.Clear(); } catch { }
+        await TurnOnSync(text);
+    }
+    private async Task TurnOnSync(string token)
     {
         if (_phone is null) return;
-        var token = PhoneToken.Password;
-        if (string.IsNullOrWhiteSpace(token)) { PhoneSyncStatus.Text = "Paste a GitHub token first."; return; }
-        PhoneSyncOnButton.IsEnabled = false; PhoneSyncStatus.Text = "Creating your secret sync gist…";
+        PhoneSyncOnButton.IsEnabled = false; PhoneSyncStatus.Text = "Setting up encrypted internet sync…";
         try { await _phone.EnableSyncAsync(token); PhoneToken.Clear(); }
         catch (RelayRejectedException ex) { PhoneSyncStatus.Text = ex.Message; }
         catch { PhoneSyncStatus.Text = "Couldn't reach GitHub. Check your internet connection and try again."; }
         finally { PhoneSyncOnButton.IsEnabled = true; PhoneChanged(); }
+    }
+    private static void OpenLink(string url) { try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { } }
+
+    private async void PhoneSyncOn_Click(object sender, RoutedEventArgs e)
+    {
+        var token = PhoneToken.Password;
+        if (string.IsNullOrWhiteSpace(token)) { PhoneSyncStatus.Text = "Paste a GitHub token first."; return; }
+        StopTokenWatch();
+        await TurnOnSync(token);
     }
 
     private async void PhoneSyncOff_Click(object sender, RoutedEventArgs e)

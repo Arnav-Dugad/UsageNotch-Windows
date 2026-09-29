@@ -124,7 +124,16 @@ public sealed class PhoneLinkService : IAsyncDisposable
 
     public static bool LegacyLinkRunning() { try { return Process.GetProcessesByName(LegacyProcess).Length > 0; } catch { return false; } }
 
-    public string BuildJson(int maxPoints = PhoneSnapshot.MaxPoints) => PhoneSnapshot.Serialize(PhoneSnapshot.FromLive(_live, _settings, _history, _database, maxPoints));
+    /// <summary>
+    /// The snapshot for paired phones on the local link. It carries the internet sync address and key (or "off"), so a phone
+    /// paired earlier picks up sync changes by itself: the link is already pinned and authenticated, and relay copies never include this.
+    /// </summary>
+    public string BuildJson(int maxPoints = PhoneSnapshot.MaxPoints)
+    {
+        var snapshot = PhoneSnapshot.FromLive(_live, _settings, _history, _database, maxPoints);
+        var sync = _identity?.Sync;
+        return PhoneSnapshot.Serialize(snapshot with { Relay = sync == null ? null : new PhoneSnapshot.RelayInfo(sync.RawUrl, sync.Key), RelayState = sync == null ? "off" : "on" });
+    }
 
     private string Serve()
     {
@@ -203,7 +212,7 @@ public sealed class PhoneLinkService : IAsyncDisposable
         try { plain = BuildJson(192); } catch { plain = PhoneSnapshot.Serialize(new PhoneSnapshot.Snapshot(1, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), [], "windows-app")); }
         var state = await _publisher.Create(token, s => RelayCrypto.Seal(s.KeyBytes, plain));
         identity.SetSync(state); _rejected = null; _uploadedFingerprint = null;
-        SyncStatus = "Internet sync is on. Pair your phone again (scan the new code) so it gets the encryption key.";
+        SyncStatus = "Internet sync is on. Your phone picks it up by itself the next time it syncs on this Wi-Fi; there's nothing to scan.";
         Changed?.Invoke();
     }
 

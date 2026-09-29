@@ -11,7 +11,7 @@ A native Windows 11 edge-pinned usage monitor inspired by the open-source **Code
 | **UsageNotch for Windows** (Windows 10/11, x64) | `UsageNotch.exe`, or the smaller `UsageNotch-*-win-x64.zip` | [Latest release](https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest) |
 | **UsageNotch for Android** (Android 9+) | `UsageNotch-*.apk` | [Android releases](https://github.com/Arnav-Dugad/UsageNotch-Android/releases/latest) |
 
-Phone sharing is built into UsageNotch for Windows 2.3. The separate UsageNotch Link download is only for 2.2 and older.
+Phone sharing is built into UsageNotch for Windows 2.3 and later. The separate UsageNotch Link download is only for 2.2 and older.
 
 No installer or .NET runtime is needed. Download `UsageNotch.exe` and double-click it. The app isn't code-signed, so if Windows SmartScreen appears, choose **More info → Run anyway**. Installed copies update themselves from GitHub Releases after verifying a signed update manifest.
 
@@ -22,11 +22,13 @@ No installer or .NET runtime is needed. Download `UsageNotch.exe` and double-cli
 
 The phone shows the dock's rings, labels, account names (when the dock shows them), countdowns and 24-hour charts, plus home-screen widgets in any size and reset alerts. Phones connect over HTTPS pinned to this PC's own certificate with a random 256-bit key. Only percentages, limits, reset times and recent readings are shared; your AI sign-ins never leave Windows. **Revoke all paired phones** invalidates every code at once.
 
-Optional **internet sync** brings readings to your phone on mobile data and keeps the latest one after this PC shuts down. Each reading is encrypted here (AES-256-GCM) and stored in a secret gist in your own GitHub account; only your paired phone has the key. Coming from the standalone UsageNotch Link? Choose **Switch to built-in**: your phone stays paired. See the [Android guide](https://github.com/Arnav-Dugad/UsageNotch-Android#pair-in-one-scan).
+The phone also gets 30 days of history (daily usage, streak, busiest hours) and the dock's pace forecast for each limit, computed on this PC from the history it already keeps.
+
+Optional **internet sync** brings readings to your phone on mobile data and keeps the latest one after this PC shuts down. Choose **Turn on internet sync**, click **Generate token** on the GitHub page that opens, and copy the token: UsageNotch takes it from the clipboard, clears the clipboard and stores it with Windows DPAPI. Paired phones switch over by themselves over the pinned Wi-Fi link, with no new code. Each reading is encrypted here (AES-256-GCM) and stored in a secret gist in your own GitHub account; only your paired phone has the key. Coming from the standalone UsageNotch Link? Choose **Switch to built-in**: your phone stays paired. See the [Android guide](https://github.com/Arnav-Dugad/UsageNotch-Android#pair-in-one-scan).
 
 ## For development
 
-**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.3.0**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
+**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.4.0**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
 
 2.2 simplifies Stats and adds customizable dock text, animated sample previews and clean AM/PM clocks. Reset times appear in expanded cards by default; collapsed-dock reset labels are optional. Claude and Codex remain visible together, with unlimited local history and explainable estimates. Download the latest app from [GitHub Releases](https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest).
 

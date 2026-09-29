@@ -579,9 +579,16 @@
                                 <TextBlock Text="Internet sync (optional)" Style="{StaticResource SectionTitle}"/>
                                 <TextBlock Text="Get readings on mobile data or any Wi-Fi, and keep the latest one after this PC shuts down. Each reading is encrypted here with a key only your paired phone has, then stored in a secret gist in your own GitHub account. GitHub sees only ciphertext." Style="{StaticResource SecondaryText}" Margin="0,6,0,10"/>
                                 <StackPanel x:Name="PhoneSyncSetup">
-                                    <TextBlock Style="{StaticResource SecondaryText}" TextWrapping="Wrap"><Hyperlink Click="PhoneTokenHelp_Click" Foreground="#9BF0CB">Create a GitHub token</Hyperlink><Run Text=" with Account permissions → Gists: Read and write, then paste it here. It's stored encrypted with Windows DPAPI."/></TextBlock>
-                                    <PasswordBox x:Name="PhoneToken" Style="{StaticResource PasswordField}" Height="40" Margin="0,10,0,10"/>
-                                    <Button x:Name="PhoneSyncOnButton" Content="Turn on internet sync" Style="{StaticResource PrimaryButton}" Click="PhoneSyncOn_Click" HorizontalAlignment="Left"/>
+                                    <TextBlock Style="{StaticResource SecondaryText}" TextWrapping="Wrap" Text="Click the button, sign in to GitHub if asked, then click Generate token and the copy icon next to the new token. UsageNotch picks it up by itself, clears it from the clipboard and stores it encrypted with Windows DPAPI. The token can only read and write gists."/>
+                                    <WrapPanel Margin="0,12,0,0">
+                                        <Button x:Name="PhoneSyncOnButton" Content="Turn on internet sync" Style="{StaticResource PrimaryButton}" Click="PhoneSyncEasy_Click" Margin="0,0,8,8"/>
+                                        <Button x:Name="PhoneSyncCancelButton" Content="Cancel" Style="{StaticResource SecondaryButton}" Click="PhoneSyncCancel_Click" Visibility="Collapsed" Margin="0,0,8,8"/>
+                                    </WrapPanel>
+                                    <Expander Header="Paste a token instead" Foreground="#E5EAF4" Margin="0,6,0,0"><StackPanel Margin="0,8,0,0">
+                                        <TextBlock Style="{StaticResource SecondaryText}" TextWrapping="Wrap"><Hyperlink Click="PhoneTokenHelp_Click" Foreground="#9BF0CB">Create a GitHub token</Hyperlink><Run Text=" with the gist scope (classic) or Account permissions → Gists: Read and write (fine-grained), then paste it here."/></TextBlock>
+                                        <PasswordBox x:Name="PhoneToken" Style="{StaticResource PasswordField}" Height="40" Margin="0,10,0,10"/>
+                                        <Button Content="Use this token" Style="{StaticResource SecondaryButton}" Click="PhoneSyncOn_Click" HorizontalAlignment="Left"/>
+                                    </StackPanel></Expander>
                                 </StackPanel>
                                 <Button x:Name="PhoneSyncOffButton" Content="Turn off internet sync" Style="{StaticResource SecondaryButton}" Click="PhoneSyncOff_Click" HorizontalAlignment="Left" Visibility="Collapsed"/>
                                 <TextBlock x:Name="PhoneSyncStatus" Style="{StaticResource SecondaryText}" Margin="0,10,0,0"/>
