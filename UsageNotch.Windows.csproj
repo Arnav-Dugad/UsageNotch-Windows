@@ -8,9 +8,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>UsageNotch</AssemblyName>
     <RootNamespace>UsageNotch</RootNamespace>
-    <Version>2.4.0</Version>
-    <FileVersion>2.4.0.0</FileVersion>
-    <AssemblyVersion>2.4.0.0</AssemblyVersion>
+    <Version>2.5.0</Version>
+    <FileVersion>2.5.0.0</FileVersion>
+    <AssemblyVersion>2.5.0.0</AssemblyVersion>
     <Product>UsageNotch</Product>
     <Description>A fluid edge-pinned AI usage monitor for Windows.</Description>
     <ApplicationIcon>Assets\UsageNotch.ico</ApplicationIcon>

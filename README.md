@@ -22,13 +22,13 @@ No installer or .NET runtime is needed. Download `UsageNotch.exe` and double-cli
 
 The phone shows the dock's rings, labels, account names (when the dock shows them), countdowns and 24-hour charts, plus home-screen widgets in any size and reset alerts. Phones connect over HTTPS pinned to this PC's own certificate with a random 256-bit key. Only percentages, limits, reset times and recent readings are shared; your AI sign-ins never leave Windows. **Revoke all paired phones** invalidates every code at once.
 
-The phone also gets 30 days of history (daily usage, streak, busiest hours) and the dock's pace forecast for each limit, computed on this PC from the history it already keeps.
+The phone also gets history (30 days of daily usage, a 90-day calendar, your streak and busiest hours) and the dock's pace forecast for each limit, computed on this PC from the history it already keeps.
 
 Optional **internet sync** brings readings to your phone on mobile data and keeps the latest one after this PC shuts down. Choose **Turn on internet sync**, click **Generate token** on the GitHub page that opens, and copy the token: UsageNotch takes it from the clipboard, clears the clipboard and stores it with Windows DPAPI. Paired phones switch over by themselves over the pinned Wi-Fi link, with no new code. Each reading is encrypted here (AES-256-GCM) and stored in a secret gist in your own GitHub account; only your paired phone has the key. Coming from the standalone UsageNotch Link? Choose **Switch to built-in**: your phone stays paired. See the [Android guide](https://github.com/Arnav-Dugad/UsageNotch-Android#pair-in-one-scan).
 
 ## For development
 
-**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.4.0**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
+**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.5.0**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
 
 2.2 simplifies Stats and adds customizable dock text, animated sample previews and clean AM/PM clocks. Reset times appear in expanded cards by default; collapsed-dock reset labels are optional. Claude and Codex remain visible together, with unlimited local history and explainable estimates. Download the latest app from [GitHub Releases](https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest).
 

@@ -23,11 +23,12 @@ public static class PhoneSnapshot
     /// <summary>Usage consumed on one local date, as a fraction of the limit. Null when this PC recorded nothing that day.</summary>
     public sealed record Day(string Date, double? Used);
     /// <summary>
-    /// 30 days of one window: daily consumption, a weekday x hour heatmap (index weekday*24+hour, Sunday first) of
-    /// consumption, how many distinct hours were observed in each cell, and the current streak of days with usage.
+    /// One window's history: 30 days of daily consumption, a weekday x hour heatmap of the last 30 days (index
+    /// weekday*24+hour, Sunday first), how many distinct hours were observed in each cell, the current streak of days
+    /// with usage, and 90 days of daily consumption for the calendar (a separate field, so Android 1.3 still reads Days).
     /// Consumption is the sum of increases between continuous readings; gaps and resets add nothing and are never guessed.
     /// </summary>
-    public sealed record History(string Window, string Label, List<Day> Days, List<double> Heat, List<int> Observed, int Streak);
+    public sealed record History(string Window, string Label, List<Day> Days, List<double> Heat, List<int> Observed, int Streak, List<Day>? Calendar = null);
     public sealed record Provider(string Id, string Name, string Status, List<Window> Windows,
         string? StatusText = null, string? Account = null, long? UpdatedAt = null, string? ManageUrl = null,
         string? Session = null, string? Weekly = null, List<Extra>? Extras = null, List<History>? History = null);
@@ -37,7 +38,7 @@ public static class PhoneSnapshot
         RelayInfo? Relay = null, string? RelayState = null);
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
-    public const int MaxProviders = 16, MaxWindows = 32, MaxPoints = 512, HistoryDays = 30;
+    public const int MaxProviders = 16, MaxWindows = 32, MaxPoints = 512, HistoryDays = 30, CalendarDays = 90;
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTimeOffset At, History Value)> HistoryCache = new();
 
     /// <summary>Builds from the running app's latest provider readings, with 24 hours of recorded history per window and, when asked, 30-day summaries.</summary>
@@ -105,35 +106,37 @@ public static class PhoneSnapshot
         var key = provider + "|" + account + "|" + window.Id;
         if (HistoryCache.TryGetValue(key, out var cached) && now - cached.At < TimeSpan.FromMinutes(10)) return cached.Value with { Label = window.Label };
         IReadOnlyList<UsagePoint> points;
-        lock (history) points = history.Read(provider, account, window.Id, now.AddDays(-HistoryDays - 1));
+        lock (history) points = history.Read(provider, account, window.Id, now.AddDays(-CalendarDays - 1));
         if (points.Count == 0) return null;
         var value = Aggregate(window.Id, window.Label, points, now);
         HistoryCache[key] = (now, value);
         return value;
     }
 
-    /// <summary>Daily consumption, weekday x hour heatmap and streak from raw readings, in this PC's local time.</summary>
+    /// <summary>Daily consumption (30 and 90 days), a 30-day weekday x hour heatmap and the streak from raw readings, in this PC's local time.</summary>
     public static History Aggregate(string window, string label, IReadOnlyList<UsagePoint> points, DateTimeOffset now)
     {
-        var today = now.ToLocalTime().Date;
+        var today = now.ToLocalTime().Date; var heatFrom = today.AddDays(-HistoryDays + 1);
         var consumed = new Dictionary<DateTime, double>(); var observed = new HashSet<DateTime>();
         var heat = new double[168]; var hours = new int[168]; var seenHours = new HashSet<(DateTime, int)>();
         for (var i = 0; i < points.Count; i++)
         {
             var local = points[i].At.ToLocalTime(); var cell = (int)local.DayOfWeek * 24 + local.Hour;
+            var recent = local.Date >= heatFrom;
             observed.Add(local.Date);
-            if (seenHours.Add((local.Date, local.Hour))) hours[cell]++;
+            if (recent && seenHours.Add((local.Date, local.Hour))) hours[cell]++;
             if (i == 0 || !UsageAnalytics.Continuous(points[i - 1], points[i])) continue;
             var delta = Math.Max(0, points[i].Used - points[i - 1].Used);
             consumed[local.Date] = consumed.GetValueOrDefault(local.Date) + delta;
-            heat[cell] += delta;
+            if (recent) heat[cell] += delta;
         }
-        var days = Enumerable.Range(0, HistoryDays).Select(i => today.AddDays(i - HistoryDays + 1))
+        List<Day> Range(int count) => Enumerable.Range(0, count).Select(i => today.AddDays(i - count + 1))
             .Select(d => new Day(d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), observed.Contains(d) ? Math.Round(consumed.GetValueOrDefault(d), 4) : null)).ToList();
+        var days = Range(HistoryDays);
         bool Used(DateTime d) => observed.Contains(d) && consumed.GetValueOrDefault(d) > .0001;
         var streak = 0; var cursor = Used(today) ? today : today.AddDays(-1);
         while (Used(cursor)) { streak++; cursor = cursor.AddDays(-1); }
-        return new History(window, label, days, heat.Select(v => Math.Round(v, 4)).ToList(), hours.ToList(), streak);
+        return new History(window, label, days, heat.Select(v => Math.Round(v, 4)).ToList(), hours.ToList(), streak, Range(CalendarDays));
     }
 
     private static double? Finite(double? value) => value is { } v && double.IsFinite(v) ? v : null;

@@ -137,6 +137,13 @@ internal static class PhoneLinkChecks
             "daily consumption adds increases only, skips gaps and drops, and leaves unobserved days empty");
         var cell = (int)noon.ToLocalTime().DayOfWeek * 24 + noon.ToLocalTime().Hour;
         Check(summary.Heat.Count == 168 && Math.Abs(summary.Heat[cell] - .1) < 1e-6 && summary.Observed[cell] == 1 && summary.Streak == 3, "heatmap cells, observed hours and the 3-day streak are correct");
+        // The 90-day calendar reaches further back; the 30-day days and heatmap don't.
+        var older = series.Prepend(new UsagePoint(noon.AddDays(-60).AddMinutes(10), .45, null, "o")).Prepend(new UsagePoint(noon.AddDays(-60), .05, null, "o")).ToList();
+        var longer = PhoneSnapshot.Aggregate("five_hour", "Current session", older, noon.AddMinutes(20));
+        var oldCell = (int)noon.AddDays(-60).ToLocalTime().DayOfWeek * 24 + noon.ToLocalTime().Hour;
+        Check(longer.Calendar is { Count: 90 } calendar && Math.Abs(calendar[^61].Used!.Value - .4) < 1e-6 && calendar[^1].Date == summary.Days[^1].Date && calendar[^62].Used == null
+            && longer.Days.SequenceEqual(summary.Days) && longer.Heat.SequenceEqual(summary.Heat) && longer.Observed.SequenceEqual(summary.Observed) && (oldCell != cell || longer.Heat[cell] == summary.Heat[cell]),
+            "the 90-day calendar includes older days while the 30-day days and heatmap stay unchanged");
 
         // Forecast from the dock's own estimator, with the limit time when it comes before the reset.
         var climbing = Enumerable.Range(0, 7).Select(i => new UsagePoint(now.AddMinutes(-30 + i * 5), .50 + i * .05, now.AddHours(5), "p")).ToList();
