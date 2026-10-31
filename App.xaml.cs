@@ -25,6 +25,8 @@ public partial class App : System.Windows.Application
     public AlertService? Alerts => _coordinator?.Alerts;
     public UpdateService Updates { get; } = new();
     public Services.Phone.PhoneLinkService? Phone { get; private set; }
+    /// <summary>Raised on the UI thread after a phone changed budgets, colours, names, order or alert settings.</summary>
+    public event Action? SharedSettingsChanged;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -60,6 +62,8 @@ public partial class App : System.Windows.Application
 
         if (settings.AutomaticUpdates && Updates.TryInstallOnRestart()) { Shutdown(); return; }
 
+        // Values set before 2.6 count as old, so a phone's newer choices win the first sync.
+        if (SharedSettings.Capture(settings, 1)) SettingsStore.Save(settings);
         _coordinator = new UsageCoordinator(settings);
         if (settings.StartWithWindows || StartupService.IsEnabled()) StartupService.Apply(true);
         _coordinator.Alerts.Raised += ShowAlert;
@@ -260,7 +264,25 @@ public partial class App : System.Windows.Application
         try { Phone = new Services.Phone.PhoneLinkService(settings, _coordinator.History); }
         catch { return; }
         var phone = Phone;
+        var coordinator = _coordinator;
         _coordinator.Refreshed += () => phone.Update(_coordinator.Items.Select(item => item.Snapshot).ToList());
+        phone.RefreshRequested = coordinator.RefreshForPhoneAsync;
+        phone.ExtrasProvider = () => new Services.Phone.PhoneSnapshot.Extras(false, coordinator.TokenReports(), coordinator.Health.Active, settings.ShareProjectsWithPhone);
+        phone.SettingsReceived = shared => Dispatcher.Invoke(() =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            SharedSettings.Capture(settings, now.ToUnixTimeMilliseconds());
+            var order = string.Join(",", settings.ProviderOrder);
+            if (SharedSettings.Merge(settings, shared, now))
+            {
+                SharedSettings.Apply(settings);
+                if (!settings.ReviewSession) SettingsStore.Save(settings);
+                if (order != string.Join(",", settings.ProviderOrder)) coordinator.RebuildProviders();
+                foreach (var item in coordinator.Items) item.RefreshAppearance();
+                SharedSettingsChanged?.Invoke();
+            }
+            return SharedSettings.ToJson(settings);
+        });
         if (!phone.ResumeOnLaunch) return;
         _ = Task.Run(async () =>
         {

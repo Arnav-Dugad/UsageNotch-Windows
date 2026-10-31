@@ -31,6 +31,64 @@ internal static class Program
         }
         if (args.Contains("--phone-check")) return PhoneLinkChecks.Run(args.SkipWhile(arg => arg != "--fixtures").Skip(1).FirstOrDefault());
         if (args.Contains("--history-check")) { HistoryUpdateChecks.Run(); return 0; }
+        if (args.Contains("--tokens-scan"))
+        {
+            // Reads this PC's real transcripts into a throwaway database and prints the reports (counts only).
+            var db = Path.Combine(Path.GetTempPath(), "UsageNotch-tokens-" + Guid.NewGuid().ToString("N") + ".db");
+            var tokens = new LocalTokenUsage(db); var clock = System.Diagnostics.Stopwatch.StartNew();
+            tokens.ScanAsync(new AppSettings()).GetAwaiter().GetResult();
+            Console.WriteLine($"First scan: {clock.Elapsed.TotalSeconds:0.0} s, {tokens.DatabaseBytes() / 1024} KB");
+            clock.Restart(); tokens.ScanAsync(new AppSettings()).GetAwaiter().GetResult();
+            Console.WriteLine($"Second scan: {clock.Elapsed.TotalMilliseconds:0} ms");
+            foreach (var r in tokens.Reports(new AppSettings(), DateTimeOffset.Now))
+                Console.WriteLine($"{r.Label}: today {r.Today.Total:N0} (${r.Today.Cost:0.00}), week {r.Week.Total:N0} (${r.Week.Cost:0.00}); top projects {string.Join(", ", r.Projects.Take(3).Select(x => $"{x.Name} {x.Share:P0}"))}; models {string.Join(", ", r.Models.Take(3).Select(x => x.Name))}");
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools(); try { File.Delete(db); File.Delete(db + "-wal"); File.Delete(db + "-shm"); } catch { }
+            return 0;
+        }
+        if (args.Contains("--serve-sample"))
+        {
+            // A real phone link with sample readings on 127.0.0.1 (the Android emulator reaches it as 10.0.2.2), for end-to-end tests.
+            var dir = Path.Combine(Path.GetTempPath(), "UsageNotch-Serve-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(dir);
+            var sampleSettings = new AppSettings { ShowAccountNames = true, ReviewSession = true };
+            var sampleHistory = new UsageHistory(Path.Combine(dir, "history.db"));
+            var start = DateTimeOffset.UtcNow.AddHours(-3); var reset = DateTimeOffset.UtcNow.AddHours(2);
+            List<ProviderSnapshot> live = [];
+            for (var i = 0; i <= 36; i++)
+            {
+                var at = start.AddMinutes(i * 5);
+                live = [new ProviderSnapshot("claude", "Claude", "", Fidelity.Official, SnapshotStatus.Ok, [new("five_hour", "Current session", .1 + i * .015, reset), new("seven_day", "All models", .2 + i * .002, reset.AddDays(4))], FetchedAt: at, AccountName: "Sample"),
+                        new ProviderSnapshot("codex", "Codex", "", Fidelity.Official, SnapshotStatus.Ok, [new("codex-primary", "5-hour limit", .05 + i * .01, reset.AddHours(1)), new("codex-secondary", "Weekly limit", .3, reset.AddDays(3))], FetchedAt: at, AccountName: "Sample")];
+                foreach (var snap in live) sampleHistory.Record(snap, at);
+            }
+            var link = new UsageNotch.Services.Phone.PhoneLinkService(sampleSettings, sampleHistory, Path.Combine(dir, "link"), Path.Combine(dir, "history.db"));
+            link.RefreshRequested = () => { Console.WriteLine($"{DateTime.Now:T} POST /v1/refresh"); return Task.FromResult("done"); };
+            link.SettingsReceived = shared =>
+            {
+                Console.WriteLine($"{DateTime.Now:T} PUT /v1/settings {shared.ToJsonString()}");
+                SharedSettings.Capture(sampleSettings, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+                SharedSettings.Merge(sampleSettings, shared, DateTimeOffset.UtcNow); SharedSettings.Apply(sampleSettings);
+                Console.WriteLine($"{DateTime.Now:T} budgets now: {string.Join(", ", sampleSettings.Budgets.Select(b => $"{b.Provider}|{b.Window} {b.Limit}%"))}");
+                return SharedSettings.ToJson(sampleSettings);
+            };
+            link.Update(live);
+            if (!link.StartAsync(loopbackOnly: true).GetAwaiter().GetResult()) { Console.WriteLine("Couldn't start: " + link.Status); return 1; }
+            var code = link.EnsureIdentity().CompactCode("10.0.2.2");
+            File.WriteAllText(Path.Combine(Path.GetTempPath(), "usagenotch-e2e-code.txt"), code);
+            Console.WriteLine("Serving on 127.0.0.1:" + UsageNotch.Services.Phone.PhoneIdentity.Port + "; pairing code written. " + code);
+            var stop = new ManualResetEventSlim(); Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Set(); };
+            stop.Wait(TimeSpan.FromMinutes(int.TryParse(Environment.GetEnvironmentVariable("SERVE_MINUTES"), out var minutes) ? minutes : 20));
+            link.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            return 0;
+        }
+        if (args.Contains("--status-check"))
+        {
+            using var statusHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            var pages = new StatusPages(statusHttp);
+            pages.RefreshAsync(new AppSettings(), ["claude", "codex", "cursor"], force: true).GetAwaiter().GetResult();
+            foreach (var id in new[] { "claude", "codex", "cursor" })
+                Console.WriteLine($"{id}: {(pages.For(id) is { } h ? $"{h.Indicator} · {h.Description} · {h.Incidents.Count} open" : "unavailable")}");
+            return 0;
+        }
         if (args.Length == 3 && args[0] == "--verify-history-copy")
         {
             using var connection = new Microsoft.Data.Sqlite.SqliteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
@@ -72,6 +130,7 @@ internal static class Program
     private static int Check()
     {
         HistoryUpdateChecks.Run();
+        PlanningChecks.Run();
         LayoutChecks.Run();
         WorkspaceChecks.Run();
         UpgradeChecks.Run();
@@ -431,14 +490,39 @@ internal static class Program
         var frame = new System.Windows.Threading.DispatcherFrame();
         var wait = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
         wait.Tick += (_, _) => { wait.Stop(); frame.Continue = false; }; wait.Start(); System.Windows.Threading.Dispatcher.PushFrame(frame);
-        SaveImage(Render(settingsRoot, 1260, 880), Path.Combine(folder, "Stats.png"));
+        void Pump(int ms)
+        {
+            var f = new System.Windows.Threading.DispatcherFrame();
+            var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ms) };
+            t.Tick += (_, _) => { t.Stop(); f.Continue = false; }; t.Start(); System.Windows.Threading.Dispatcher.PushFrame(f);
+        }
+        var tabs = (TabControl)settingsWindow.FindName("SettingsTabs");
+        void Shot(int tab, string name, double width = 1260)
+        {
+            tabs.SelectedIndex = tab; Render(settingsRoot, width, 880); Pump(900);
+            SaveImage(Render(settingsRoot, width, 880), Path.Combine(folder, name));
+        }
+        Shot(0, "Stats.png");
         SaveImage(Render(settingsRoot, 820, 880), Path.Combine(folder, "StatsCompact.png"));
-        ((TabControl)settingsWindow.FindName("SettingsTabs")).SelectedIndex = 1;
-        SaveImage(Render(settingsRoot, 1260, 880), Path.Combine(folder, "Settings.png"));
-        ((TabControl)settingsWindow.FindName("SettingsTabs")).SelectedIndex = 7;
-        SaveImage(Render(settingsRoot, 1260, 880), Path.Combine(folder, "TimeSettings.png"));
-        ((TabControl)settingsWindow.FindName("SettingsTabs")).SelectedIndex = 4;
-        SaveImage(Render(settingsRoot, 940, 880), Path.Combine(folder, "AlertSettings.png"));
+        var dashboard = (UsageNotch.Controls.StatsDashboard)settingsWindow.FindName("StatsView");
+        dashboard.Open("claude", null); Pump(1200);
+        SaveImage(Render(settingsRoot, 1260, 880), Path.Combine(folder, "ProviderDetail.png"));
+        dashboard.CloseDetail(); Pump(300);
+        Shot(1, "History.png");
+        Shot(2, "Settings.png");
+        Shot(3, "Appearance.png");
+        Shot(5, "AlertSettings.png", 1100);
+        Shot(6, "Providers.png");
+        Shot(7, "Budgets.png");
+        Shot(8, "TimeSettings.png");
+        Shot(10, "Data.png");
+        previewSettings.AppTheme = "Light";
+        UsageNotch.Services.Theme.Apply(settingsWindow.Resources, previewSettings);
+        Shot(0, "StatsLight.png");
+        Shot(1, "HistoryLight.png");
+        Shot(3, "AppearanceLight.png");
+        previewSettings.AppTheme = "Dark";
+        UsageNotch.Services.Theme.Apply(settingsWindow.Resources, previewSettings);
         var alert = new AlertWindow(new AlertNotice("Claude · getting close", "Current session · 82% used · 18% left · resets in 47 min", false, "claude", .82, IsPreview: true), new AppSettings { ReviewSession = true, ReducedMotion = true });
         SaveImage(Render((FrameworkElement)alert.Content, 380, double.PositiveInfinity), Path.Combine(folder, "AlertCard.png"));
 

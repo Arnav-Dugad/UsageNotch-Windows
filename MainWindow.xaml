@@ -87,7 +87,12 @@
                                         ReducedMotion="{Binding ReducedMotion}"
                                         TrackBrush="{DynamicResource DockRingTrack}"
                                         IsKnown="{Binding UsedFraction, Converter={StaticResource NullToBool}}"
-                                        Status="{Binding Status}"/>
+                                        Status="{Binding Status}"
+                                        TimeLeft="{Binding TimeLeftFraction}"
+                                        Budget="{Binding BudgetFraction}"
+                                        SecondaryBudget="{Binding SecondaryBudgetFraction}"
+                                        Comet="{Binding CometRings}"
+                                        Ink="{Binding RingInk}"/>
                                     <controls:ProviderLogo Provider="{Binding Id}" Colored="{Binding ColoredLogos}"
                                         Foreground="{DynamicResource DockText}"
                                         Width="{Binding LogoSize}" Height="{Binding LogoSize}" IsHitTestVisible="False"/>
@@ -95,8 +100,9 @@
                                 <TextBlock Text="{Binding DockName}" ToolTip="{Binding DockName}" Foreground="{DynamicResource DockMuted}" FontFamily="{StaticResource UIFont}"
                                            FontSize="10" HorizontalAlignment="Center" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"
                                            Visibility="{Binding ShowProviderNames, Converter={StaticResource BoolVisibility}}"/>
-                                <TextBlock Text="{Binding PercentText}" Foreground="{DynamicResource DockText}" FontFamily="{StaticResource UIFont}"
+                                <controls:RollingNumber Text="{Binding PercentText}" Foreground="{DynamicResource DockText}" FontFamily="{StaticResource UIFont}"
                                            FontSize="{Binding PercentFontSize}" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,6,0,0"
+                                           Reduced="{Binding ReducedMotion}" IsHitTestVisible="False"
                                            Visibility="{Binding ShowPercentages, Converter={StaticResource BoolVisibility}}"/>
                                 <TextBlock Text="{Binding SecondaryLine}" Foreground="{DynamicResource DockFaint}" FontFamily="{StaticResource UIFont}"
                                            FontSize="10" HorizontalAlignment="Center" Margin="0,1,0,0"

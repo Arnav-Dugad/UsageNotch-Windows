@@ -82,6 +82,30 @@ internal static class PhoneLinkChecks
         Check(!PhoneSnapshot.Serialize(PhoneSnapshot.FromLive([Claude(now, .01)], new AppSettings { ShowAccountNames = false }, history, null)).Contains("Sam Example"), "account name stays private when the dock hides it");
         File.WriteAllText(Path.Combine(fixtures, "phone-snapshot-fixture.json"), text);
 
+        // Protocol 2: negotiated features, shared settings, accounts and the detailed history only when asked for.
+        var v2Settings = new AppSettings { ShowAccountNames = true, Accounts = [new ExtraAccount { Slug = "work", Kind = "claude", Label = "Work", Folder = directory }] };
+        v2Settings.Budgets.Add(new BudgetSetting("claude", "five_hour", 60, 1080));
+        v2Settings.Accents["claude"] = "#7A5CFF";
+        SharedSettings.Capture(v2Settings, 1_700_000_000_000);
+        var work = Claude(now, .01) with { Id = "claude:work", DisplayName = "Claude · Work" };
+        var extras = new PhoneSnapshot.Extras(true, [], [new Incident("claude", "Elevated errors", "minor", "investigating", "https://status.claude.com/incidents/x", now)], true);
+        var detailed = PhoneSnapshot.Serialize(PhoneSnapshot.FromLive([Claude(now, .01), work, codex], v2Settings, history, null, extras: extras));
+        using (var doc = JsonDocument.Parse(detailed))
+        {
+            var root = doc.RootElement;
+            Check(root.GetProperty("schema").GetInt32() == 1 && root.GetProperty("protocol").GetInt32() == 2 && root.GetProperty("features").EnumerateArray().Select(f => f.GetString()).Contains("settings"),
+                "protocol 2 keeps schema 1 for older phones and lists its features");
+            Check(root.GetProperty("shared").GetProperty("budget:claude|five_hour").GetProperty("v").GetProperty("limit").GetInt32() == 60
+                && root.GetProperty("shared").GetProperty("accent:claude").GetProperty("v").GetString() == "#7A5CFF", "shared settings travel with every snapshot");
+            var workJson = root.GetProperty("providers")[1];
+            Check(workJson.GetProperty("id").GetString() == "claude:work" && workJson.GetProperty("kind").GetString() == "claude" && workJson.GetProperty("accountLabel").GetString() == "Work", "extra accounts carry their kind and label");
+            Check(root.GetProperty("incidents")[0].GetProperty("impact").GetString() == "minor", "open incidents are included");
+            var claudeHistory = root.GetProperty("providers")[0].GetProperty("history")[0];
+            Check(claudeHistory.GetProperty("trend").GetArrayLength() >= 2 && claudeHistory.TryGetProperty("reliability", out _) && claudeHistory.TryGetProperty("sessions", out _), "a protocol 2 request gets the 7-day trend and insights");
+        }
+        Check(!PhoneSnapshot.Serialize(PhoneSnapshot.FromLive([Claude(now, .01)], v2Settings, history, null)).Contains("\"trend\":["), "older phones get no trend (same payload size as before)");
+        File.WriteAllText(Path.Combine(fixtures, "phone-snapshot-v2-fixture.json"), detailed);
+
         // HTTPS server with a pinned certificate.
         var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0); listener.Start(); var port = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop();
         await using (var server = new PhoneServer(identity, () => text))
@@ -96,6 +120,35 @@ internal static class PhoneLinkChecks
             Check((await client.GetAsync("/v1/snapshot?token=" + identity.Token)).StatusCode == HttpStatusCode.NotFound && (await client.PostAsync("/v1/snapshot", null)).StatusCode == HttpStatusCode.NotFound, "query credentials and other routes rejected");
             identity.Revoke();
             Check((await client.GetAsync("/v1/snapshot")).StatusCode == HttpStatusCode.Unauthorized, "revoked key rejected immediately");
+        }
+
+        // Protocol 2 routes: refresh on request, shared settings both ways, the detailed snapshot for phones that ask.
+        var merged = new AppSettings();
+        listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0); listener.Start(); port = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop();
+        await using (var server = new PhoneServer(identity, detailedRequest => detailedRequest ? detailed : text, () => Task.FromResult("done"), body =>
+        {
+            var shared = (System.Text.Json.Nodes.JsonNode.Parse(body) as System.Text.Json.Nodes.JsonObject)?["shared"] as System.Text.Json.Nodes.JsonObject;
+            if (shared is null) return null;
+            SharedSettings.Merge(merged, shared, DateTimeOffset.UtcNow); SharedSettings.Apply(merged);
+            return new System.Text.Json.Nodes.JsonObject { ["shared"] = SharedSettings.ToJson(merged) }.ToJsonString();
+        }))
+        {
+            await server.Start(port, loopbackOnly: true);
+            using var handler = new HttpClientHandler { AllowAutoRedirect = false, ServerCertificateCustomValidationCallback = (_, cert, _, _) => cert != null && Convert.ToHexString(SHA256.HashData(cert.RawData)).ToLowerInvariant() == identity.Pin };
+            using var client = new HttpClient(handler) { BaseAddress = new Uri($"https://127.0.0.1:{port}") };
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", identity.Token);
+            var refreshed = await client.PostAsync("/v1/refresh", null);
+            Check(refreshed.IsSuccessStatusCode && refreshed.Headers.GetValues("X-UsageNotch-Refresh").Single() == "done", "POST /v1/refresh refreshes and reports done");
+            var asked = new HttpRequestMessage(HttpMethod.Get, "/v1/snapshot"); asked.Headers.Add("X-UsageNotch-Protocol", "2");
+            Check(await (await client.SendAsync(asked)).Content.ReadAsStringAsync() == detailed, "phones that send X-UsageNotch-Protocol: 2 get the detailed snapshot");
+            var body = new StringContent("{\"shared\":{\"budget:codex|codex-primary\":{\"v\":{\"limit\":40,\"by\":null},\"at\":1700000000000},\"name:codex\":{\"v\":\"Work\",\"at\":1700000000000},\"evil\":{\"v\":1,\"at\":1}}}", Encoding.UTF8, "application/json");
+            var put = await client.PutAsync("/v1/settings", body);
+            using (var reply = JsonDocument.Parse(await put.Content.ReadAsStringAsync()))
+                Check(put.IsSuccessStatusCode && reply.RootElement.GetProperty("shared").TryGetProperty("budget:codex|codex-primary", out _) && !reply.RootElement.GetProperty("shared").TryGetProperty("evil", out _)
+                      && merged.Budgets.Single().Limit == 40 && merged.CodexDockLabel == "Work", "PUT /v1/settings merges valid entries, applies them and drops unknown keys");
+            Check((await client.PutAsync("/v1/settings", new StringContent("not json", Encoding.UTF8, "application/json"))).StatusCode == HttpStatusCode.BadRequest
+                  && (await client.PutAsync("/v1/settings", new StringContent(new string('x', PhoneServer.MaxSettingsBytes + 10), Encoding.UTF8, "application/json"))).StatusCode is HttpStatusCode.RequestEntityTooLarge or HttpStatusCode.BadRequest,
+                  "invalid or oversized settings are refused");
         }
 
         // Service: start/stop, port conflicts, uploads.

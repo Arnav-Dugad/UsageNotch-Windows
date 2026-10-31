@@ -35,39 +35,59 @@ public sealed class ProviderStatsCard : Border
     private DateTimeOffset? _selectedStart, _selectedEnd;
     private string? _account;
     private string? _loadedWindow;
-    private static Brush Ink => new SolidColorBrush(Color.FromRgb(229, 234, 244));
-    private static TextBlock Text(string text, double size = 12) => new() { Text = text, FontSize = size, Foreground = Ink, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 3) };
-    private Button Action(string label, Action clicked)
+    private static Brush Ink => new SolidColorBrush(Theme.Current.Text);
+    private static TextBlock Text(string text, double size = 12)
     {
-        var button = new Button { Content = label, Margin = new Thickness(0, 3, 5, 3), Padding = new Thickness(9, 6, 9, 6), FontSize = 11, Foreground = Ink, Background = new SolidColorBrush(Color.FromRgb(35, 42, 56)), BorderBrush = new SolidColorBrush(Color.FromRgb(58, 67, 86)), Cursor = System.Windows.Input.Cursors.Hand };
-        button.SetResourceReference(StyleProperty, "SecondaryButton");
-        button.Click += (_, _) => clicked(); return button;
+        var block = new TextBlock { Text = text, FontSize = size, FontFamily = Ui.Body, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 3) };
+        block.SetResourceReference(TextBlock.ForegroundProperty, "Ui.Text");
+        return block;
+    }
+    private static TextBlock Muted(TextBlock block) { block.SetResourceReference(TextBlock.ForegroundProperty, "Ui.Muted"); return block; }
+    private FrameworkElement Action(string label, Action clicked)
+    {
+        var button = Ui.Button(label, clicked, false, null, Motion.IsReduced(_coordinator.Settings));
+        button.Margin = new Thickness(0, 3, 6, 3); button.Padding = new Thickness(12, 6, 12, 6);
+        return button;
+    }
+    private static void SetContent(FrameworkElement button, UIElement content)
+    {
+        if (button is Border { Child: StackPanel row }) { row.Children.Clear(); row.Children.Add(content); }
     }
     private void Section(string title, UIElement content)
     {
         _analysis.Children.Add(new Expander { Header = title, Content = content, Foreground = Ink, Margin = new Thickness(0, 9, 0, 2), HorizontalContentAlignment = System.Windows.HorizontalAlignment.Stretch });
     }
-    public ProviderStatsCard(UsageCoordinator coordinator, string id)
+    private readonly bool _embedded;
+    private readonly GlassTabBar _ranges;
+    public ProviderStatsCard(UsageCoordinator coordinator, string id, bool embedded = false)
     {
-        _coordinator = coordinator; ProviderId = id;
+        _coordinator = coordinator; ProviderId = id; _embedded = embedded;
         _chart.Start = _overview.Start = DateTimeOffset.UtcNow.AddDays(-1);
         _chart.End = _overview.End = DateTimeOffset.UtcNow;
         _chart.TimeSettings = _overview.TimeSettings = coordinator.Settings;
-        Background = new SolidColorBrush(Color.FromRgb(21, 26, 35)); BorderBrush = new SolidColorBrush(Color.FromRgb(43, 51, 67));
-        BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(14); Padding = new Thickness(18); Margin = new Thickness(0, 0, 10, 12); Child = _body;
+        if (embedded) { Background = System.Windows.Media.Brushes.Transparent; Padding = new Thickness(0); Margin = new Thickness(0); }
+        else
+        {
+            SetResourceReference(BackgroundProperty, "Ui.Glass"); SetResourceReference(BorderBrushProperty, "Ui.Rim");
+            BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(DesignTokens.Radius.Card); Padding = new Thickness(20); Margin = new Thickness(0, 0, 10, 12);
+        }
+        Child = _body;
         Logo = new ProviderLogo { Provider = id, Colored = true, Width = 28, Height = 28, Margin = new Thickness(0, 0, 10, 0) };
         var heading = new StackPanel { Orientation = Orientation.Horizontal }; heading.Children.Add(Logo);
-        heading.Children.Add(Text(Provider?.DisplayName ?? (id == "claude" ? "Claude" : "Codex"), 20)); _body.Children.Add(heading);
+        heading.Children.Add(Text(Provider?.DisplayName ?? (id == "claude" ? "Claude" : "Codex"), 20)); if (!embedded) _body.Children.Add(heading);
         _usage.FontSize = 34; _usage.FontWeight = FontWeights.SemiBold; _usage.Margin = new Thickness(0, 14, 0, 3);
-        _clock.Foreground = _status.Foreground = _coverage.Foreground = _notice.Foreground = new SolidColorBrush(Color.FromRgb(153, 165, 185));
+        foreach (var muted in new[] { _clock, _status, _coverage, _notice, _assumptions, _detail }) Muted(muted);
         _clock.FontSize = 11; _date.FontSize = 13; _forecast.FontSize = 13; _forecast.Margin = new Thickness(0, 13, 0, 5);
-        _body.Children.Add(_status); _body.Children.Add(_windows); _body.Children.Add(_usage); _body.Children.Add(_date); _body.Children.Add(_clock);
+        if (!embedded) _body.Children.Add(_status);
+        _body.Children.Add(_windows);
+        if (!embedded) { _body.Children.Add(_usage); _body.Children.Add(_date); _body.Children.Add(_clock); }
         _body.Children.Add(_forecast);
         var reasoning = new StackPanel(); reasoning.Children.Add(_coverage); reasoning.Children.Add(_assumptions);
-        _confidence.Content = reasoning; _confidence.FontSize = 11; _body.Children.Add(_confidence);
-        var ranges = new WrapPanel();
-        foreach (var (label, days) in new[] { ("24h", 1), ("7d", 7), ("30d", 30), ("All history", 0) })
-            ranges.Children.Add(Action(label, () => { _days = days; _selectedStart = _selectedEnd = null; Refresh(); }));
+        _confidence.Content = reasoning; _confidence.FontSize = 11; _confidence.Header = "Assumptions"; _body.Children.Add(_confidence);
+        var spans = new[] { 1, 7, 30, 0 };
+        _ranges = new GlassTabBar(["24h", "7d", "30d", "All history"], 0, 32, 12) { Reduced = Motion.IsReduced(coordinator.Settings), HorizontalAlignment = System.Windows.HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
+        _ranges.SelectionChanged += index => { _days = spans[index]; _selectedStart = _selectedEnd = null; Refresh(); _chart.PlayReveal(Motion.IsReduced(coordinator.Settings)); };
+        var ranges = _ranges;
         _analysis.Children.Add(Action("Zoom to current reset period", () =>
         {
             if (_recent.LastOrDefault() is not { } last) return;
@@ -75,8 +95,9 @@ public sealed class ProviderStatsCard : Border
             Select(period[0].At, last.Reset ?? DateTimeOffset.UtcNow);
         }));
         _body.Children.Add(ranges); _body.Children.Add(_chart);
-        var legend = new WrapPanel(); var observed = Text("━  Recorded usage", 10); observed.Foreground = new SolidColorBrush(Color.FromRgb(117, 224, 191)); observed.Margin = new Thickness(0, 0, 16, 0);
-        var projected = Text("┄  Estimate", 10); projected.Foreground = new SolidColorBrush(Color.FromRgb(190, 164, 240)); legend.Children.Add(observed); legend.Children.Add(projected); _body.Children.Add(legend);
+        _chart.LineColor = _overview.LineColor = Accents.Of(coordinator.Settings, id);
+        var legend = new WrapPanel(); var observed = Text("━  Recorded usage", 10); observed.Foreground = new SolidColorBrush(_chart.LineColor); observed.Margin = new Thickness(0, 0, 16, 0);
+        var projected = Text("┄  Estimate", 10); projected.Foreground = new SolidColorBrush(Accents.FromArgb(DesignTokens.Forecast)); legend.Children.Add(observed); legend.Children.Add(projected); _body.Children.Add(legend);
         _analysis.Children.Add(_overview); _analysis.Children.Add(Text("Drag either chart to zoom into a period. Hover for exact readings; Ctrl+wheel adjusts zoom. Shading shows possible outcomes at different observed paces, not probabilities. Blank time means missing readings.", 11));
         _body.Children.Add(_detail); _analysis.Children.Add(_insights);
         Section("Work sessions", _sessions); Section("Busy hours & days", _patterns); Section("Resets & missing readings", _events);
@@ -85,7 +106,7 @@ public sealed class ProviderStatsCard : Border
         _chart.EventClicked += e => _detail.Text = $"{TimeDisplay.Stamp(e.At, coordinator.Settings)} · {e.Kind}\n{e.Explanation}";
         _timer.Tick += (_, _) => Clock();
         SizeChanged += (_, _) => _chart.Height = Math.Clamp(ActualWidth * .32, 150, 240);
-        Loaded += (_, _) => { _explore.IsExpanded = coordinator.Settings.DetailedStats; _timer.Start(); Refresh(); };
+        Loaded += (_, _) => { _explore.IsExpanded = coordinator.Settings.DetailedStats; _timer.Start(); Refresh(); _chart.PlayReveal(Motion.IsReduced(coordinator.Settings)); };
         Unloaded += (_, _) => { _timer.Stop(); _generation++; };
     }
     private void Select(DateTimeOffset start, DateTimeOffset end)
@@ -114,9 +135,8 @@ public sealed class ProviderStatsCard : Border
         if (!snapshot.Windows.Any(w => w.Id == _windowId)) _windowId = snapshot.Windows.FirstOrDefault()?.Id;
         foreach (var w in snapshot.Windows)
         {
-            var button = Action($"{w.Label}  {(w.UsedFraction is { } u ? $"{u * 100:0.#}%" : "—")}", () => { _windowId = w.Id; _selectedStart = _selectedEnd = null; Refresh(); });
-            if (w.Id == _windowId) button.BorderBrush = new SolidColorBrush(Color.FromRgb(117, 224, 191));
-            _windows.Children.Add(button);
+            var chip = Ui.Chip($"{w.Label}  {(w.UsedFraction is { } u ? $"{u * 100:0.#}%" : "—")}", w.Id == _windowId, () => { _windowId = w.Id; _selectedStart = _selectedEnd = null; Refresh(); _chart.PlayReveal(Motion.IsReduced(_coordinator.Settings)); }, null, Motion.IsReduced(_coordinator.Settings));
+            _windows.Children.Add(chip);
         }
         var window = Window; if (window is null) { _usage.Text = "Waiting for provider limits"; return; }
         _usage.Text = window.UsedFraction is { } used ? $"{used * 100:0.#}% used" : "No reading yet";
@@ -154,14 +174,14 @@ public sealed class ProviderStatsCard : Border
         _insights.Children.Clear();
         foreach (var insight in UsageAnalytics.Insights(_recent, now))
         {
-            var b = Action("", () => Select(insight.Start, insight.End)); b.Content = Text(insight.Text + "  → Inspect", 11); _insights.Children.Add(b);
+            var b = Action("", () => Select(insight.Start, insight.End)); SetContent(b, Text(insight.Text + "  → Inspect", 11)); _insights.Children.Add(b);
         }
         _sessions.Children.Clear();
         _sessions.Children.Add(Text("Observation sessions are separated by gaps over 20 minutes, not detected keyboard activity. Consumption is the sum of observed increases within continuous periods; resets and missing intervals are excluded. Peak is the highest observed interval rate (provider rounding can amplify it).", 11));
         foreach (var s in UsageAnalytics.Sessions(_recent, result.events))
         {
             var b = Action("", () => Select(s.Start, s.End));
-            b.Content = Text($"{TimeDisplay.Stamp(s.Start, _coordinator.Settings)} – {TimeDisplay.Clock(s.End, _coordinator.Settings.Use24HourTime)}\n{ s.Consumption:0.00} percentage points recorded · peak {s.PeakPace:0.0} points/hour\n{s.Resets} confirmed resets · {s.Missing} excluded boundaries/gaps", 11); _sessions.Children.Add(b);
+            SetContent(b, Text($"{TimeDisplay.Stamp(s.Start, _coordinator.Settings)} – {TimeDisplay.Clock(s.End, _coordinator.Settings.Use24HourTime)}\n{ s.Consumption:0.00} percentage points recorded · peak {s.PeakPace:0.0} points/hour\n{s.Resets} confirmed resets · {s.Missing} excluded boundaries/gaps", 11)); _sessions.Children.Add(b);
         }
         if (_recent.Count < 2) _sessions.Children.Add(Text("Waiting for consecutive observations.", 11));
         _patterns.Children.Clear();
@@ -183,7 +203,7 @@ public sealed class ProviderStatsCard : Border
         }
         _events.Children.Clear();
         foreach (var evt in _chart.Events.TakeLast(100).Reverse())
-        { var b = Action("", () => { _detail.Text = evt.Explanation; Select(evt.At.AddMinutes(-30), evt.At.AddMinutes(30)); }); b.Content = Text($"{TimeDisplay.Stamp(evt.At, _coordinator.Settings)} · {evt.Kind}", 11); _events.Children.Add(b); }
+        { var b = Action("", () => { _detail.Text = evt.Explanation; Select(evt.At.AddMinutes(-30), evt.At.AddMinutes(30)); }); SetContent(b, Text($"{TimeDisplay.Stamp(evt.At, _coordinator.Settings)} · {evt.Kind}", 11)); _events.Children.Add(b); }
         if (_chart.Events.Count == 0) _events.Children.Add(Text("No recorded events in this interval.", 11));
         _notice.Text = result.error ?? (result.broad ? "Overview sampled for display. Select ≤32 days to inspect exact readings. Raw history has no automatic expiry." : $"{result.points.Count:N0} exact readings in view · no automatic history expiry.");
         Clock();

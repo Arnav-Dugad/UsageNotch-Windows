@@ -21,15 +21,31 @@ public sealed class ClaudeSubscriptionProvider : IUsageProvider
     private bool _cacheLoaded;
     private string? _accountName;
     private sealed record UsageCache(string AccountKey, ProviderSnapshot? Snapshot, DateTimeOffset RetryAfter, int RateLimits);
-    public string Id => "claude";
-    public string DisplayName => "Claude";
+    private readonly string? _profilePath;
+    public string Id { get; }
+    public string DisplayName { get; }
 
     public ClaudeSubscriptionProvider(HttpClient http, string? credentialsPath = null, string? cachePath = null)
     {
         _http = http;
+        Id = "claude"; DisplayName = "Claude";
         _usesDefaultCredentials = credentialsPath is null;
         _credentialsPath = credentialsPath ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", ".credentials.json");
         _cachePath = cachePath ?? (credentialsPath is null ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UsageNotch", "claude-usage.cache") : null);
+        if (_usesDefaultCredentials) _profilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude.json");
+    }
+
+    /// <summary>
+    /// An extra Claude Code account kept in its own configuration folder (Claude Code's CLAUDE_CONFIG_DIR). It has its own
+    /// sign-in, cache and 429 cooldown, so accounts never share readings.
+    /// </summary>
+    public ClaudeSubscriptionProvider(HttpClient http, ExtraAccount account)
+    {
+        _http = http;
+        Id = account.ProviderId; DisplayName = account.DisplayName;
+        _credentialsPath = Path.Combine(account.Folder, ".credentials.json");
+        _profilePath = Path.Combine(account.Folder, ".claude.json");
+        _cachePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UsageNotch", $"claude-usage-{account.Slug}.cache");
     }
 
     public async Task<ProviderSnapshot> FetchAsync(CancellationToken ct)
@@ -133,11 +149,10 @@ public sealed class ClaudeSubscriptionProvider : IUsageProvider
         _accountName = null;
         // Prefer Claude Code's account ID, so normal token renewal does not discard
         // that account's last reading. Fall back to a token hash, never another user.
-        if (_usesDefaultCredentials)
+        if (_profilePath is { } profile)
         {
             try
             {
-                var profile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude.json");
                 using var doc = JsonDocument.Parse(File.ReadAllText(profile));
                 if (doc.RootElement.TryGetProperty("oauthAccount", out var account) && account.ValueKind == JsonValueKind.Object)
                 {

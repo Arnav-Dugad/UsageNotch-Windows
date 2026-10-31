@@ -36,7 +36,7 @@ public sealed class ProviderLogo : FrameworkElement
 
     protected override void OnRender(DrawingContext context)
     {
-        var key = Provider switch { "codex" or "openai_api" => "openai", "gemini" => "googlegemini", "anthropic_api" => "claude", _ => Provider };
+        var key = UsageNotch.Services.ProviderKind.Of(Provider ?? "") switch { "codex" or "openai_api" => "openai", "gemini" => "googlegemini", "anthropic_api" => "claude", var kind => kind };
         if (!Logos.TryGetValue(key, out var geometry)) return;
         Brush brush = Foreground;
         if (Colored)

@@ -21,6 +21,10 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
     public ObservableCollection<ProviderViewModel> Items { get; } = [];
     public AlertService Alerts { get; }
     public UsageHistory History { get; }
+    public LocalTokenUsage Tokens { get; } = new();
+    public StatusPages Health { get; }
+    private readonly Dictionary<string, IUsageProvider> _accountProviders = new();
+    private DateTimeOffset _lastTokenScan;
     public AppSettings Settings => _settings;
     public DateTimeOffset? LastRefresh { get; private set; }
 
@@ -33,6 +37,8 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
         History = history ?? new UsageHistory();
         Alerts = new AlertService(settings);
         _claude = new ClaudeSubscriptionProvider(_http);
+        Health = new StatusPages(_http);
+        Tokens.Changed += () => _tokenReports = null;
         RebuildProviders();
     }
 
@@ -51,6 +57,17 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
         if (_settings.CursorEnabled) desired.Add(new CursorSubscriptionProvider(_http));
         if (_settings.OpenAiApiEnabled) desired.Add(new OpenAiApiProvider(_http, _settings));
         if (_settings.AnthropicApiEnabled) desired.Add(new AnthropicApiProvider(_http, _settings));
+        foreach (var account in _settings.Accounts.Where(a => a.Enabled && ExtraAccount.SlugPattern.IsMatch(a.Slug)))
+        {
+            // Keep each account's provider (and its cooldown and cache) for as long as the account exists.
+            var key = account.ProviderId + "|" + account.Folder + "|" + account.Label;
+            if (!_accountProviders.TryGetValue(key, out var provider))
+                _accountProviders[key] = provider = account.Kind == "codex" ? new CodexSubscriptionProvider(account) : new ClaudeSubscriptionProvider(_http, account);
+            desired.Add(provider);
+        }
+        // Your own order (shared with your phone) first; everything else keeps the default order.
+        var order = _settings.ProviderOrder;
+        desired = desired.Select((p, i) => (p, i)).OrderBy(x => order.IndexOf(x.p.Id) is var at && at >= 0 ? at : order.Count + x.i).Select(x => x.p).ToList();
 
         _providers.Clear();
         _providers.AddRange(desired);
@@ -113,11 +130,19 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
             }).ToArray();
             await Task.WhenAll(tasks);
 
+            if (DateTimeOffset.UtcNow - _lastTokenScan > TimeSpan.FromMinutes(5))
+            {
+                _lastTokenScan = DateTimeOffset.UtcNow;
+                _ = Tokens.ScanAsync(_settings, _cts.Token);
+            }
+            _ = Health.RefreshAsync(_settings, providers.Select(p => p.Id));
+            var items = await OnUiResult(() => Items.ToArray());
+            var alertContext = await Task.Run(() => AlertContextFor(items));
             await OnUi(() =>
             {
                 LastRefresh = DateTimeOffset.Now;
                 IsRefreshing = false;
-                try { Alerts.Evaluate(Items); } catch { }
+                try { Alerts.Evaluate(Items, alertContext); } catch { }
                 Refreshed?.Invoke();
             });
         }
@@ -127,6 +152,88 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
             if (!_cts.IsCancellationRequested && Interlocked.Exchange(ref _refreshQueued, 0) == 1)
                 _ = RefreshAllAsync();
         }
+    }
+
+    /// <summary>
+    /// A refresh a paired phone asked for: "done" after a fresh round, "throttled" when one finished under 20 seconds ago,
+    /// "timeout" after 25 seconds. Providers keep their own cooldowns, so this never hammers an endpoint.
+    /// </summary>
+    public async Task<string> RefreshForPhoneAsync()
+    {
+        if (LastRefresh is { } last && DateTimeOffset.Now - last < TimeSpan.FromSeconds(20)) return "throttled";
+        var done = new TaskCompletionSource();
+        void Finished() => done.TrySetResult();
+        Refreshed += Finished;
+        try
+        {
+            _ = OnUi(() => _ = RefreshAllAsync());
+            return await Task.WhenAny(done.Task, Task.Delay(TimeSpan.FromSeconds(25))) == done.Task ? "done" : "timeout";
+        }
+        finally { Refreshed -= Finished; }
+    }
+
+    private static async Task<T> OnUiResult<T>(Func<T> func)
+    {
+        var application = System.Windows.Application.Current;
+        return application is null ? func() : await application.Dispatcher.InvokeAsync(func);
+    }
+
+    private readonly Dictionary<string, (DateTimeOffset At, WindowSummary? Value)> _summaries = new();
+
+    /// <summary>The pace forecast for one window from the last three hours of readings.</summary>
+    public PaceForecast? PaceFor(ProviderSnapshot snapshot, LimitWindow window)
+    {
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            lock (History)
+            {
+                var points = History.Read(snapshot.Id, History.AccountKey(snapshot), window.Id, now.AddHours(-3));
+                return points.Count == 0 ? null : UsageForecast.Calculate(points, snapshot.Status, now, _settings);
+            }
+        }
+        catch { return null; }
+    }
+
+    /// <summary>90 days of history for one window, summarised; cached for five minutes.</summary>
+    public WindowSummary? SummaryFor(ProviderSnapshot snapshot, LimitWindow window, bool fresh = false)
+    {
+        var now = DateTimeOffset.UtcNow;
+        string key;
+        lock (History) key = snapshot.Id + "|" + History.AccountKey(snapshot) + "|" + window.Id;
+        lock (_summaries) if (!fresh && _summaries.TryGetValue(key, out var cached) && now - cached.At < TimeSpan.FromMinutes(5)) return cached.Value;
+        WindowSummary? value = null;
+        try
+        {
+            lock (History)
+            {
+                var account = History.AccountKey(snapshot);
+                var points = History.Read(snapshot.Id, account, window.Id, now.AddDays(-HistoryInsights.CalendarDays - 1));
+                var events = History.ReadEvents(snapshot.Id, account, window.Id, now.AddDays(-30));
+                if (points.Count > 0) value = HistoryInsights.Summarize(points, events, now);
+            }
+        }
+        catch { }
+        lock (_summaries) _summaries[key] = (now, value);
+        return value;
+    }
+
+    public StartHint? BestStartFor(ProviderViewModel item)
+    {
+        if (item.SessionWindow is not { } session || SummaryFor(item.Snapshot, session) is not { } summary) return null;
+        return BestStart.Hint(session, BestStart.PeriodOf(session), summary.Heat, summary.Observed, DateTimeOffset.Now);
+    }
+
+    private AlertContext AlertContextFor(IReadOnlyList<ProviderViewModel> items)
+    {
+        var paces = new Dictionary<string, PaceForecast?>(); var starts = new Dictionary<string, StartHint?>(); var summaries = new Dictionary<string, WindowSummary?>();
+        foreach (var item in items.Where(i => i.Status == SnapshotStatus.Ok))
+        {
+            foreach (var w in item.Windows.Where(w => w.UsedFraction is not null)) paces[AlertContext.Key(item.Id, w.Id)] = PaceFor(item.Snapshot, w);
+            if (item.SessionWindow is { } session) summaries[AlertContext.Key(item.Id, session.Id)] = SummaryFor(item.Snapshot, session);
+            if (_settings.AlertGoodMoment) starts[item.Id] = BestStartFor(item);
+        }
+        return new AlertContext(paces, starts, summaries);
     }
 
     private static async Task OnUi(Action action)
@@ -148,7 +255,7 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
         provider.Id, provider.DisplayName, GlyphFor(provider.Id), Fidelity.Official,
         SnapshotStatus.Loading, [], "Securely checking your account…");
 
-    private static string GlyphFor(string id) => id switch
+    private static string GlyphFor(string id) => ProviderKind.Of(id) switch
     {
         "claude" or "anthropic_api" => "✳",
         "codex" => "✦",
@@ -157,6 +264,17 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
         "openai_api" => "◎",
         _ => "•"
     };
+
+    private (DateTimeOffset At, IReadOnlyList<TokenReport> Reports)? _tokenReports;
+    /// <summary>Token reports for every local source, recomputed at most once a minute.</summary>
+    public IReadOnlyList<TokenReport> TokenReports(bool fresh = false)
+    {
+        var now = DateTimeOffset.Now;
+        if (!fresh && _tokenReports is { } cached && now - cached.At < TimeSpan.FromMinutes(1)) return cached.Reports;
+        var reports = Tokens.Reports(_settings, now);
+        _tokenReports = (now, reports);
+        return reports;
+    }
 
     private void OnPropertyChanged([CallerMemberName] string? name = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

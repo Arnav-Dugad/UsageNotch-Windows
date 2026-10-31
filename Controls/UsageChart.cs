@@ -22,6 +22,20 @@ public sealed class UsageChart : FrameworkElement
     public DateTimeOffset? SelectionEnd { get; set; }
     public bool Overview { get; set; }
     public AppSettings TimeSettings { get; set; } = new();
+    /// <summary>The line's colour: the provider's accent. The area under it fades from the same colour.</summary>
+    public Color LineColor { get; set; } = Color.FromRgb(117, 224, 191);
+    public static readonly DependencyProperty RevealProperty = DependencyProperty.Register(nameof(Reveal), typeof(double), typeof(UsageChart),
+        new FrameworkPropertyMetadata(1d, FrameworkPropertyMetadataOptions.AffectsRender));
+    /// <summary>0..1 of the plot drawn so far, for the left-to-right draw-in.</summary>
+    public double Reveal { get => (double)GetValue(RevealProperty); set => SetValue(RevealProperty, value); }
+    /// <summary>Draws the line in from the left (range changes, first show). Reduced motion draws it at once.</summary>
+    public void PlayReveal(bool reduced)
+    {
+        BeginAnimation(RevealProperty, null);
+        if (reduced) { Reveal = 1; return; }
+        BeginAnimation(RevealProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(760))
+        { EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut } });
+    }
     public event Action<DateTimeOffset, DateTimeOffset>? IntervalSelected;
     public event Action<UsageEvent>? EventClicked;
     private double? _drag;
@@ -72,10 +86,11 @@ public sealed class UsageChart : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc); dc.DrawRectangle(Brushes.Transparent, null, new Rect(RenderSize));
-        var ink = new SolidColorBrush(Color.FromRgb(153, 162, 180));
-        var accent = new SolidColorBrush(Color.FromRgb(117, 224, 191));
-        var purple = new SolidColorBrush(Color.FromRgb(190, 164, 240));
-        var grid = new Pen(new SolidColorBrush(Color.FromArgb(25, 255, 255, 255)), 1);
+        var theme = Theme.Current;
+        var ink = new SolidColorBrush(theme.Faint);
+        var accent = new SolidColorBrush(LineColor);
+        var purple = new SolidColorBrush(Accents.FromArgb(DesignTokens.Forecast));
+        var grid = new Pen(new SolidColorBrush(theme.Hairline), 1);
         var visible = Points.Where(p => p.At >= Start && p.At <= End).ToArray();
         var max = Math.Max(1, visible.Length > 0 ? Math.Ceiling(visible.Max(p => p.Used) * 4) / 4 : 1);
         var last = Points.LastOrDefault();
@@ -91,11 +106,35 @@ public sealed class UsageChart : FrameworkElement
             dc.DrawLine(grid, new Point(40, y), new Point(40 + PlotWidth, y));
             Label($"{max * (1 - fraction) * 100:0}%", 0, y - 6);
         }
-        dc.PushClip(new RectangleGeometry(new Rect(40, 7, PlotWidth, PlotHeight + 2)));
+        dc.PushClip(new RectangleGeometry(new Rect(40, 7, PlotWidth * Math.Clamp(Reveal, 0, 1), PlotHeight + 2)));
+        if (!Overview)
+        {
+            // A soft area under each continuous run, fading from the accent to nothing.
+            var fill = new LinearGradientBrush(Palette.Alpha(LineColor, theme.Dark ? .30 : .22), Palette.Alpha(LineColor, 0), 90);
+            var baseline = 8 + PlotHeight;
+            var start = 0;
+            for (var i = 1; i <= Points.Count; i++)
+            {
+                if (i < Points.Count && UsageAnalytics.Continuous(Points[i - 1], Points[i])) continue;
+                if (i - start >= 2)
+                {
+                    var area = new StreamGeometry();
+                    using (var g = area.Open())
+                    {
+                        g.BeginFigure(new Point(X(Points[start].At), baseline), true, true);
+                        for (var k = start; k < i; k++) g.LineTo(Map(Points[k].At, Points[k].Used), true, true);
+                        g.LineTo(new Point(X(Points[i - 1].At), baseline), true, false);
+                    }
+                    area.Freeze();
+                    dc.DrawGeometry(fill, null, area);
+                }
+                start = i;
+            }
+        }
         for (var i = 0; i < Points.Count; i++)
         {
             var p = Points[i];
-            if (i > 0 && UsageAnalytics.Continuous(Points[i - 1], p)) dc.DrawLine(new Pen(accent, Overview ? 1 : 2), Map(Points[i - 1].At, Points[i - 1].Used), Map(p.At, p.Used));
+            if (i > 0 && UsageAnalytics.Continuous(Points[i - 1], p)) dc.DrawLine(new Pen(accent, Overview ? 1.2 : 2.2) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round }, Map(Points[i - 1].At, Points[i - 1].Used), Map(p.At, p.Used));
             if (p.At >= Start && p.At <= End && (visible.Length < 160 || Overview)) dc.DrawEllipse(accent, null, Map(p.At, p.Used), Overview ? 1 : 2, Overview ? 1 : 2);
         }
         if (project)
@@ -107,7 +146,7 @@ public sealed class UsageChart : FrameworkElement
                 g.LineTo(Map(projectionEnd, p.Used + (Forecast!.HighRate ?? 0) * hours), true, false);
                 g.LineTo(Map(projectionEnd, p.Used + (Forecast.LowRate ?? 0) * hours), true, false);
             }
-            dc.DrawGeometry(new SolidColorBrush(Color.FromArgb(40, 190, 164, 240)), null, geometry);
+            dc.DrawGeometry(new SolidColorBrush(Palette.Alpha(purple.Color, .16)), null, geometry);
             dc.DrawLine(new Pen(purple, 1.8) { DashStyle = DashStyles.Dash }, Map(p.At, p.Used), Map(projectionEnd, p.Used + Forecast!.PercentPerHour!.Value / 100 * hours));
             dc.DrawLine(new Pen(purple, 1) { DashStyle = DashStyles.Dot }, new Point(X(p.At), 8), new Point(X(p.At), PlotHeight + 8));
         }

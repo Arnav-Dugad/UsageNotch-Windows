@@ -15,6 +15,17 @@ Phone sharing is built into UsageNotch for Windows 2.3 and later. The separate U
 
 No installer or .NET runtime is needed. Download `UsageNotch.exe` and double-click it. The app isn't code-signed, so if Windows SmartScreen appears, choose **More info → Run anyway**. Installed copies update themselves from GitHub Releases after verifying a signed update manifest.
 
+## 2.6: one design on Windows and Android
+
+Stats & Settings is rebuilt in the liquid glass of UsageNotch for Android: **Overview**, **History** and **Settings** on a gliding glass tab bar, light and dark themes, comet-trail rings with time-left hairlines and budget ticks, rolling digits and spring motion. New in 2.6:
+
+- **Budgets** on any limit, the **best time to start**, and alerts for pace, budgets, upcoming renewals, a good moment to start and a weekly recap.
+- **More accounts**: a second Claude Code or Codex sign-in in its own folder (CLAUDE_CONFIG_DIR / CODEX_HOME).
+- **Tokens on this PC** from Claude Code and Codex transcripts, with the API-price equivalent, top projects and models. Only counts, model names and folder names are kept.
+- **Unused capacity, limits reached, reset reliability** and **provider incidents** from public status pages.
+- **Two-way sync with your phone** for budgets, colours, names, order, alert levels and quiet hours, and **refresh from the phone** ([protocol](docs/PHONE-PROTOCOL.md)).
+- Colours, shapes and motion come from one token file, [design/tokens.json](design/tokens.json), shared with Android.
+
 ## Your usage on your phone
 
 1. Open **Settings → Phone** and turn on **Share usage with paired phones**. Allow Private networks if Windows Firewall asks.
@@ -28,7 +39,7 @@ Optional **internet sync** brings readings to your phone on mobile data and keep
 
 ## For development
 
-**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.5.0**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
+**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.6.0**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
 
 2.2 simplifies Stats and adds customizable dock text, animated sample previews and clean AM/PM clocks. Reset times appear in expanded cards by default; collapsed-dock reset labels are optional. Claude and Codex remain visible together, with unlimited local history and explainable estimates. Download the latest app from [GitHub Releases](https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest).
 

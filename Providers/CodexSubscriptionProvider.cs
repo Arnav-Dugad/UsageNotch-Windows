@@ -2,14 +2,21 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using UsageNotch.Models;
+using UsageNotch.Services;
 
 namespace UsageNotch.Providers;
 
 public sealed class CodexSubscriptionProvider : IUsageProvider
 {
     private const string Glyph = "\u2726";
-    public string Id => "codex";
-    public string DisplayName => "Codex";
+    private readonly string? _home;
+    public string Id { get; } = "codex";
+    public string DisplayName { get; } = "Codex";
+
+    public CodexSubscriptionProvider() { }
+
+    /// <summary>An extra Codex account with its own CODEX_HOME folder, so its sign-in stays separate.</summary>
+    public CodexSubscriptionProvider(ExtraAccount account) { Id = account.ProviderId; DisplayName = account.DisplayName; _home = account.Folder; }
 
     public async Task<ProviderSnapshot> FetchAsync(CancellationToken ct)
     {
@@ -19,7 +26,7 @@ public sealed class CodexSubscriptionProvider : IUsageProvider
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(25));
-        using var process = Process.Start(CreateStartInfo(exe));
+        using var process = Process.Start(CreateStartInfo(exe, _home));
         if (process is null) return Error("Could not start the Codex app-server.");
 
         try
@@ -109,25 +116,25 @@ public sealed class CodexSubscriptionProvider : IUsageProvider
                 _ => slot == "primary" ? "Primary limit" : "Secondary limit"
             };
             var label = string.IsNullOrWhiteSpace(limitName) || limitName.Equals("Codex", StringComparison.OrdinalIgnoreCase)
-                ? windowName : $"{limitName} · {windowName}";
+                ? windowName : $"{limitName} Â· {windowName}";
             output.Add(new LimitWindow($"{limitId}-{slot}", label,
                 usedPercent.HasValue ? Math.Clamp(usedPercent.Value / 100.0, 0, 1) : null, reset));
         }
     }
 
-    private static ProcessStartInfo CreateStartInfo(string exe)
+    internal static ProcessStartInfo CreateStartInfo(string exe, string? home = null, string verb = "app-server --stdio")
     {
         string fileName;
         string arguments;
         if (exe.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) || exe.EndsWith(".bat", StringComparison.OrdinalIgnoreCase))
         {
             fileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
-            arguments = $"/d /s /c \"\"{exe}\" app-server --stdio\"";
+            arguments = $"/d /s /c \"\"{exe}\" {verb}\"";
         }
         else
         {
             fileName = exe;
-            arguments = "app-server --stdio";
+            arguments = verb;
         }
         var info = new ProcessStartInfo(fileName, arguments)
         {
@@ -145,7 +152,7 @@ public sealed class CodexSubscriptionProvider : IUsageProvider
         {
             info.Environment["USERPROFILE"] = profile;
             info.Environment["HOME"] = profile;
-            info.Environment["CODEX_HOME"] = Path.Combine(profile, ".codex");
+            info.Environment["CODEX_HOME"] = home ?? Path.Combine(profile, ".codex");
         }
         return info;
     }
@@ -206,7 +213,7 @@ public sealed class CodexSubscriptionProvider : IUsageProvider
         try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
     }
 
-    private static string? FindCodex()
+    internal static string? FindCodex()
     {
         var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);

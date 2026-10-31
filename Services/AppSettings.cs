@@ -87,6 +87,35 @@ public sealed class AppSettings
     public bool AnthropicApiEnabled { get; set; }
     public bool GeminiUseCloudProject { get; set; }
 
+    /// <summary>Extra Claude Code and Codex accounts, each in its own configuration folder.</summary>
+    public List<ExtraAccount> Accounts { get; set; } = [];
+
+    // Planning and personalisation, synced with paired phones through Shared.
+    public List<BudgetSetting> Budgets { get; set; } = [];
+    public Dictionary<string, string> Accents { get; set; } = new();
+    public Dictionary<string, string> DockNames { get; set; } = new();
+    public List<string> ProviderOrder { get; set; } = [];
+    /// <summary>Last-writer-wins copy of the settings shared with phones (see docs/PHONE-PROTOCOL.md).</summary>
+    public Dictionary<string, SharedEntry> Shared { get; set; } = new();
+
+    // Look
+    public string AppTheme { get; set; } = "System";
+    public bool CometRings { get; set; } = true;
+
+    // More alerts
+    public bool AlertBudgets { get; set; } = true;
+    public bool AlertPace { get; set; } = true;
+    public bool AlertPreReset { get; set; } = true;
+    public int PreResetMinutes { get; set; } = 10;
+    public bool AlertGoodMoment { get; set; }
+    public bool WeeklyRecap { get; set; } = true;
+    public DateTimeOffset? LastRecapAt { get; set; }
+
+    // Data
+    public bool TrackLocalTokens { get; set; } = true;
+    public bool ShowIncidents { get; set; } = true;
+    public bool ShareProjectsWithPhone { get; set; } = true;
+
     public double? OpenAiMonthlyBudgetUsd { get; set; }
     public double? AnthropicMonthlyBudgetUsd { get; set; }
 

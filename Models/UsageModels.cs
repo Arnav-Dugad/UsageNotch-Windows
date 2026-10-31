@@ -59,7 +59,25 @@ public sealed class ProviderViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ResetText));
         OnPropertyChanged(nameof(UpdatedText));
         OnPropertyChanged(nameof(LimitDescription));
+        OnPropertyChanged(nameof(TimeLeftFraction));
     }
+
+    /// <summary>0..1 of the primary window's period still to run before its reset (the ring's hairline); NaN when unknown.</summary>
+    public double TimeLeftFraction => TimeLeftOf(PrimaryWindow);
+    public static double TimeLeftOf(LimitWindow? w)
+    {
+        if (w?.ResetsAt is not { } reset || BestStart.PeriodOf(w) is not { } period) return double.NaN;
+        var left = (reset - DateTimeOffset.Now).TotalSeconds / period.TotalSeconds;
+        return left is >= 0 and <= 1.05 ? Math.Clamp(left, 0, 1) : double.NaN;
+    }
+    /// <summary>The budget tick on the outer ring, in the ring's terms (remaining flips it); NaN without a budget.</summary>
+    public double BudgetFraction => BudgetOn(PrimaryWindow);
+    public double SecondaryBudgetFraction => Dual ? BudgetOn(WeeklyWindow) : double.NaN;
+    private double BudgetOn(LimitWindow? w) => w is not null && Budgets.Of(_settings, Id, w.Id) is { } b ? ShowRemaining ? 1 - b.Limit / 100d : b.Limit / 100d : double.NaN;
+    public bool CometRings => _settings.CometRings;
+    public System.Windows.Media.Color RingInk => DockTheme.Parse(_settings.DockColor) is var surface && Palette.IsLight(surface) ? System.Windows.Media.Color.FromRgb(0x12, 0x15, 0x1B) : System.Windows.Media.Color.FromRgb(0xF4, 0xF6, 0xFA);
+    public System.Windows.Media.Color AccentColor => Accents.Of(_settings, Id);
+    public AppSettings Settings => _settings;
 
     public ProviderSnapshot Snapshot
     {
@@ -68,6 +86,8 @@ public sealed class ProviderViewModel : INotifyPropertyChanged
     }
 
     public string Id => Snapshot.Id;
+    /// <summary>"claude" for both the primary and extra Claude accounts ("claude:work").</summary>
+    public string Kind => ProviderKind.Of(Snapshot.Id);
     public string DisplayName => Snapshot.DisplayName;
     public string Glyph => Snapshot.Glyph;
     public IReadOnlyList<LimitWindow> Windows => Snapshot.Windows;
@@ -78,7 +98,7 @@ public sealed class ProviderViewModel : INotifyPropertyChanged
     public double? RingFraction => UsedFraction is { } value ? ShowRemaining ? 1 - Math.Clamp(value, 0, 1) : value : null;
     public double SecondaryRingFraction => SecondaryKnown && ShowRemaining ? 1 - Math.Clamp(SecondaryFraction, 0, 1) : SecondaryFraction;
 
-    public LimitWindow? SessionWindow => Id switch
+    public LimitWindow? SessionWindow => Kind switch
     {
         "claude" => Windows.FirstOrDefault(window => window.Id == "five_hour"),
         "codex" => Windows.FirstOrDefault(window => window.Id is "codex-primary" or "default-primary")
@@ -86,7 +106,7 @@ public sealed class ProviderViewModel : INotifyPropertyChanged
         _ => Windows.FirstOrDefault()
     };
 
-    public LimitWindow? WeeklyWindow => Id switch
+    public LimitWindow? WeeklyWindow => Kind switch
     {
         "claude" => Windows.FirstOrDefault(window => window.Id == "seven_day"),
         "codex" => Windows.FirstOrDefault(window => window.Id == SessionWindow?.Id.Replace("-primary", "-secondary")),
@@ -117,7 +137,7 @@ public sealed class ProviderViewModel : INotifyPropertyChanged
     {
         get
         {
-            var custom = Id switch { "claude" => _settings.ClaudeDockLabel, "codex" => _settings.CodexDockLabel, "gemini" => _settings.GeminiDockLabel, "cursor" => _settings.CursorDockLabel, _ => "" };
+            var custom = _settings.DockNames.TryGetValue(Id, out var named) ? named : Id switch { "claude" => _settings.ClaudeDockLabel, "codex" => _settings.CodexDockLabel, "gemini" => _settings.GeminiDockLabel, "cursor" => _settings.CursorDockLabel, _ => "" };
             return string.IsNullOrWhiteSpace(custom) ? DisplayName : new string(custom.Trim().Where(c => !char.IsControl(c)).Take(18).ToArray());
         }
     }
@@ -137,14 +157,14 @@ public sealed class ProviderViewModel : INotifyPropertyChanged
     public bool HasWindows => Windows.Count > 0;
     public bool HasManageUrl => Uri.TryCreate(Snapshot.ManageUrl, UriKind.Absolute, out _);
     public bool ShowDashboard => (_settings.ShowDashboardButton || Status is SnapshotStatus.Unsupported or SnapshotStatus.Stale or SnapshotStatus.Error) && HasManageUrl;
-    public string DashboardLabel => Id == "gemini" && Status == SnapshotStatus.Unsupported ? "Google migration guidance" : "Open dashboard";
+    public string DashboardLabel => Kind == "gemini" && Status == SnapshotStatus.Unsupported ? "Google migration guidance" : "Open dashboard";
 
     public string PercentText => Status == SnapshotStatus.Loading ? "···" : RingFraction is null ? "—" : $"{Math.Round(Math.Clamp(RingFraction.Value, 0, 1) * 100):0}%" + (ShowRemaining && _settings.ShowUsageSuffix ? " left" : "");
     public double UsedPercent => Math.Clamp((UsedFraction ?? 0) * 100.0, 0, 100);
 
     /// <summary>Second line under the ring in orbit mode; stacked so it can never clip the dock.</summary>
     public string SecondaryLine => Dual && ShowPercentages && _settings.ShowSecondaryPercentage
-        ? (Id is "claude" or "codex" ? $"7d {DisplayPercent(WeeklyWindow?.UsedFraction)}" : $"2nd {DisplayPercent(WeeklyWindow?.UsedFraction)}")
+        ? (ProviderKind.HasWeekly(Id) ? $"7d {DisplayPercent(WeeklyWindow?.UsedFraction)}" : $"2nd {DisplayPercent(WeeklyWindow?.UsedFraction)}")
         : string.Empty;
 
     public string HeadlineLabel => PrimaryWindow?.Label ?? Status switch
@@ -193,7 +213,7 @@ public sealed class ProviderViewModel : INotifyPropertyChanged
         get
         {
             var head = DisplayName + " · " + (UsedFraction is { } fraction ? $"{Math.Round(fraction * 100):0}% used" : StatusPill);
-            if (Dual) head += Id is "claude" or "codex" ? "\nOuter ring: 5-hour. Inner ring: 7-day." : "\nOuter ring: first bucket. Inner ring: second.";
+            if (Dual) head += ProviderKind.HasWeekly(Id) ? "\nOuter ring: 5-hour. Inner ring: 7-day." : "\nOuter ring: first bucket. Inner ring: second.";
             if (!string.IsNullOrWhiteSpace(ResetText)) head += "\n" + char.ToUpperInvariant(ResetText[0]) + ResetText[1..];
             return head;
         }

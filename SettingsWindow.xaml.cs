@@ -30,6 +30,7 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         _settings = settings;
         if (coordinator is not null) StatsView.Connect(coordinator);
+        InitWorkspace(coordinator);
         AutoUpdateBox.IsChecked = settings.AutomaticUpdates;
         UpdateStatus.Text = (System.Windows.Application.Current as App)?.Updates.Status ?? "Update checks start with the running app.";
         if (System.Windows.Application.Current is App currentApp)
@@ -38,8 +39,7 @@ public partial class SettingsWindow : Window
             Closed += (_, _) => currentApp.Updates.Changed -= UpdatesChanged;
         }
         InitPhone();
-        VersionLine.Text = "Your usage. Your way.  ·  " +
-            (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version is { } version ? $"{version.Major}.{version.Minor}" : "1.6");
+        VersionLine.Text = "Version " + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version is { } version ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.6");
 
         ClaudeBox.IsChecked = settings.ClaudeEnabled;
         CodexBox.IsChecked = settings.CodexEnabled;
@@ -67,6 +67,15 @@ public partial class SettingsWindow : Window
         QuietBox.IsChecked = settings.QuietHoursEnabled;
         QuietStartSlider.Value = settings.QuietStartHour;
         QuietEndSlider.Value = settings.QuietEndHour;
+        AlertBudgetsBox.IsChecked = settings.AlertBudgets;
+        AlertPaceBox.IsChecked = settings.AlertPace;
+        AlertPreResetBox.IsChecked = settings.AlertPreReset;
+        PreResetSlider.Value = Math.Clamp(settings.PreResetMinutes, 5, 60);
+        GoodMomentBox.IsChecked = settings.AlertGoodMoment;
+        WeeklyRecapBox.IsChecked = settings.WeeklyRecap;
+        TrackTokensBox.IsChecked = settings.TrackLocalTokens;
+        ShareProjectsBox.IsChecked = settings.ShareProjectsWithPhone;
+        IncidentsBox.IsChecked = settings.ShowIncidents;
         if (System.Windows.Application.Current is App { Alerts: { } alerts }) AlertHistory.ItemsSource = alerts.History;
         UpdateSnoozeStatus();
 
@@ -85,13 +94,9 @@ public partial class SettingsWindow : Window
         Height = Math.Min(880, SystemParameters.WorkArea.Height - 30);
         Width = Math.Min(1260, SystemParameters.WorkArea.Width - 30);
         if (!settings.ReviewSession) WindowPlacement.Restore(this);
-        SourceInitialized += (_, _) =>
-        {
-            if (WindowMaterials.Apply(this, transient: false)) WindowSurface.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(210, 16, 18, 24));
-        };
         Closing += (_, _) => { if (!settings.ReviewSession && !_fullscreen) WindowPlacement.Save(this); };
         Loaded += SettingsWindow_Loaded;
-        UpdateFooter.Text = "History stored locally · F11 full screen";
+        UpdateFooter.Text = "Changes preview live · F11 full screen";
         UpdatesChanged();
     }
 
@@ -127,7 +132,8 @@ public partial class SettingsWindow : Window
         foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
         {
             yield return child;
-            if (child is UsageNotch.Controls.StatsDashboard) continue;
+            // Pages and editors that save on their own are not part of Save/Cancel.
+            if (child is UsageNotch.Controls.StatsDashboard or UsageNotch.Controls.HistoryView or ContentControl { Tag: "manual" } or FrameworkElement { Name: "SettingsNav" }) continue;
             foreach (var nested in LogicalDescendants(child)) yield return nested;
         }
     }
@@ -151,7 +157,9 @@ public partial class SettingsWindow : Window
     private void ApplyLive()
     {
         if (_suspend) return;
+        var theme = _settings.AppTheme; var comet = _settings.CometRings;
         Collect();
+        if (theme != _settings.AppTheme || comet != _settings.CometRings) ApplyTheme();
         UpdatePreview();
         SettingsChanged?.Invoke();
     }
@@ -187,6 +195,17 @@ public partial class SettingsWindow : Window
         _settings.QuietHoursEnabled = QuietBox.IsChecked == true;
         _settings.QuietStartHour = (int)QuietStartSlider.Value;
         _settings.QuietEndHour = (int)QuietEndSlider.Value;
+        _settings.AlertBudgets = AlertBudgetsBox.IsChecked == true;
+        _settings.AlertPace = AlertPaceBox.IsChecked == true;
+        _settings.AlertPreReset = AlertPreResetBox.IsChecked == true;
+        _settings.PreResetMinutes = (int)PreResetSlider.Value;
+        _settings.AlertGoodMoment = GoodMomentBox.IsChecked == true;
+        _settings.WeeklyRecap = WeeklyRecapBox.IsChecked == true;
+        _settings.TrackLocalTokens = TrackTokensBox.IsChecked == true;
+        _settings.ShareProjectsWithPhone = ShareProjectsBox.IsChecked == true;
+        _settings.ShowIncidents = IncidentsBox.IsChecked == true;
+        _settings.AppTheme = ThemeLight.IsChecked == true ? "Light" : ThemeDark.IsChecked == true ? "Dark" : "System";
+        _settings.CometRings = CometBox.IsChecked == true;
         _settings.AlertWarnPercent = (int)WarnSlider.Value;
         _settings.AlertCriticalPercent = (int)Math.Max(CriticalSlider.Value, WarnSlider.Value);
 
@@ -243,6 +262,7 @@ public partial class SettingsWindow : Window
         Bind(CriticalSlider, CriticalValue, value => $"{value:0}%");
         Bind(QuietStartSlider, QuietStartValue, value => HourLabel((int)value));
         Bind(QuietEndSlider, QuietEndValue, value => HourLabel((int)value));
+        Bind(PreResetSlider, PreResetValue, value => $"{value:0} min before");
     }
 
     private static void Bind(Slider slider, TextBlock label, Func<double, string> format)
@@ -287,6 +307,9 @@ public partial class SettingsWindow : Window
         PreviewRing.SecondaryValue = remaining ? .66 : .34;
         PreviewRing.Remaining = remaining;
         PreviewRing.ReducedMotion = ReducedMotionBox.IsChecked == true;
+        PreviewRing.Comet = CometBox.IsChecked == true;
+        PreviewRing.Ink = Theme.Current.Ink;
+        PreviewRing.TrackBrush = Palette.Frozen(Theme.Current.Track);
         PreviewLogo.Colored = LogoColorBox.IsChecked == true;
         PreviewHeadline.Text = $"{Math.Round((remaining ? 1 - used : used) * 100)}% {(remaining ? "left" : "used")}";
         PreviewCaption.Text = dual
@@ -403,6 +426,10 @@ public partial class SettingsWindow : Window
         DashboardBox.IsChecked = settings.ShowDashboardButton;
         ReducedMotionBox.IsChecked = settings.ReducedMotion;
         SetDockColor(settings.DockColor);
+        ThemeSystem.IsChecked = settings.AppTheme is not ("Light" or "Dark");
+        ThemeLight.IsChecked = settings.AppTheme == "Light";
+        ThemeDark.IsChecked = settings.AppTheme == "Dark";
+        CometBox.IsChecked = settings.CometRings;
     }
 
     private void RestoreAppearance_Click(object sender, RoutedEventArgs e)
@@ -532,6 +559,7 @@ public partial class SettingsWindow : Window
     public void ShowProvider(string id, System.Windows.Point? origin)
     {
         SettingsTabs.SelectedIndex = 0;
+        if (!IsLoaded) { Loaded += (_, _) => StatsView.Open(id, null); return; }
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
         {
             var logo = StatsView.FocusProvider(id);
@@ -543,7 +571,7 @@ public partial class SettingsWindow : Window
     {
         if (System.Windows.Application.Current is not App app) return;
         UpdateStatus.Text = app.Updates.Status;
-        UpdateFooter.Text = app.Updates.Busy || app.Updates.Ready ? app.Updates.Status : "History stored locally · F11 full screen";
+        UpdateFooter.Text = app.Updates.Busy || app.Updates.Ready ? app.Updates.Status : "Changes preview live · F11 full screen";
         UpdateProgress.Visibility = app.Updates.Busy ? Visibility.Visible : Visibility.Collapsed;
         UpdateProgress.IsIndeterminate = app.Updates.Progress is null;
         UpdateProgress.Value = app.Updates.Progress ?? 0;

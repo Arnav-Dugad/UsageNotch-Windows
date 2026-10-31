@@ -12,20 +12,28 @@ using UsageNotch.Models;
 
 namespace UsageNotch.Services.Phone;
 
-/// <summary>HTTPS endpoint for paired phones: one read-only route, a bearer key, a pinned certificate and tight limits.</summary>
+/// <summary>
+/// HTTPS endpoint for paired phones: a bearer key, a pinned certificate and tight limits. Routes (docs/PHONE-PROTOCOL.md):
+/// GET /v1/snapshot, POST /v1/refresh and PUT /v1/settings. Phones that send X-UsageNotch-Protocol: 2 get the detailed snapshot.
+/// </summary>
 public sealed class PhoneServer : IAsyncDisposable
 {
+    public const int MaxSettingsBytes = 32 * 1024;
     private WebApplication? _app;
     private readonly PhoneIdentity _identity;
-    private readonly Func<string> _snapshot;
-    public PhoneServer(PhoneIdentity identity, Func<string> snapshot) { _identity = identity; _snapshot = snapshot; }
+    private readonly Func<bool, string> _snapshot;
+    private readonly Func<Task<string>>? _refresh;
+    private readonly Func<string, string?>? _settings;
+    public PhoneServer(PhoneIdentity identity, Func<bool, string> snapshot, Func<Task<string>>? refresh = null, Func<string, string?>? settings = null)
+    { _identity = identity; _snapshot = snapshot; _refresh = refresh; _settings = settings; }
+    public PhoneServer(PhoneIdentity identity, Func<string> snapshot) : this(identity, _ => snapshot()) { }
     public async Task Start(int port = PhoneIdentity.Port, bool loopbackOnly = false)
     {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args = [] });
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(options =>
         {
-            options.AddServerHeader = false; options.Limits.MaxRequestBodySize = 0;
+            options.AddServerHeader = false; options.Limits.MaxRequestBodySize = MaxSettingsBytes;
             options.Limits.MaxRequestHeadersTotalSize = 8192; options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(5);
             options.Limits.MaxConcurrentConnections = 16; options.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(5);
             options.Listen(loopbackOnly ? IPAddress.Loopback : IPAddress.Any, port, listen => listen.UseHttps(_identity.Certificate));
@@ -37,12 +45,45 @@ public sealed class PhoneServer : IAsyncDisposable
         {
             context.Response.Headers.CacheControl = "no-store";
             context.Response.Headers["X-Content-Type-Options"] = "nosniff";
-            if (context.Request.Path != "/v1/snapshot" || context.Request.Method != "GET" || context.Request.QueryString.HasValue) { context.Response.StatusCode = 404; return; }
+            var path = context.Request.Path.Value; var method = context.Request.Method;
+            var route = (method, path) switch
+            {
+                ("GET", "/v1/snapshot") => "snapshot",
+                ("POST", "/v1/refresh") when _refresh != null => "refresh",
+                ("PUT", "/v1/settings") when _settings != null => "settings",
+                _ => null
+            };
+            if (route == null || context.Request.QueryString.HasValue) { context.Response.StatusCode = 404; return; }
             using var lease = limiter.AttemptAcquire(); if (!lease.IsAcquired) { context.Response.StatusCode = 429; return; }
             var header = context.Request.Headers.Authorization.ToString(); var expected = "Bearer " + _identity.Token;
             if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(header), Encoding.UTF8.GetBytes(expected))) { context.Response.StatusCode = 401; return; }
-            string json;
-            try { json = _snapshot(); } catch { context.Response.StatusCode = 503; return; }
+            var detailed = int.TryParse(context.Request.Headers["X-UsageNotch-Protocol"].ToString(), out var protocol) && protocol >= 2;
+            string? json;
+            try
+            {
+                switch (route)
+                {
+                    case "refresh":
+                        context.Response.Headers["X-UsageNotch-Refresh"] = await _refresh!();
+                        json = _snapshot(detailed);
+                        break;
+                    case "settings":
+                        if (!(context.Request.ContentType ?? "").StartsWith("application/json", StringComparison.OrdinalIgnoreCase)) { context.Response.StatusCode = 415; return; }
+                        using (var reader = new StreamReader(context.Request.Body, Encoding.UTF8))
+                        {
+                            var body = await reader.ReadToEndAsync(context.RequestAborted);
+                            json = _settings!(body);
+                        }
+                        if (json == null) { context.Response.StatusCode = 400; return; }
+                        break;
+                    default:
+                        json = _snapshot(detailed);
+                        break;
+                }
+            }
+            catch (Microsoft.AspNetCore.Http.BadHttpRequestException) { context.Response.StatusCode = 413; return; }
+            catch (JsonException) { context.Response.StatusCode = 400; return; }
+            catch { context.Response.StatusCode = 503; return; }
             context.Response.ContentType = "application/json; charset=utf-8";
             await context.Response.WriteAsync(json, context.RequestAborted);
         });
@@ -81,8 +122,15 @@ public sealed class PhoneLinkService : IAsyncDisposable
     private PhoneIdentity? _identity;
     private PhoneServer? _server;
     private string? _uploadedFingerprint; private DateTimeOffset _uploadedAt; private SyncState? _rejected;
-    private sealed record Served(DateTimeOffset At, string Json);
+    private sealed record Served(DateTimeOffset At, bool Detailed, string Json);
     private volatile Served? _served;
+
+    /// <summary>Asks the app for a fresh round of readings (POST /v1/refresh). Returns done, throttled or timeout.</summary>
+    public Func<Task<string>>? RefreshRequested { get; set; }
+    /// <summary>Merges a phone's shared settings (PUT /v1/settings) and returns the merged map, or null when invalid.</summary>
+    public Func<System.Text.Json.Nodes.JsonObject, System.Text.Json.Nodes.JsonObject?>? SettingsReceived { get; set; }
+    /// <summary>Local token history and status-page incidents to include in snapshots.</summary>
+    public Func<PhoneSnapshot.Extras>? ExtrasProvider { get; set; }
     private bool _disposed;
 
     public event Action? Changed;
@@ -128,20 +176,47 @@ public sealed class PhoneLinkService : IAsyncDisposable
     /// The snapshot for paired phones on the local link. It carries the internet sync address and key (or "off"), so a phone
     /// paired earlier picks up sync changes by itself: the link is already pinned and authenticated, and relay copies never include this.
     /// </summary>
-    public string BuildJson(int maxPoints = PhoneSnapshot.MaxPoints)
+    public string BuildJson(int maxPoints = PhoneSnapshot.MaxPoints, bool detailed = false)
     {
-        var snapshot = PhoneSnapshot.FromLive(_live, _settings, _history, _database, maxPoints);
+        var extras = Extras(detailed, 400);
+        var snapshot = PhoneSnapshot.FromLive(_live, _settings, _history, _database, maxPoints, extras: extras);
         var sync = _identity?.Sync;
         return PhoneSnapshot.Serialize(snapshot with { Relay = sync == null ? null : new PhoneSnapshot.RelayInfo(sync.RawUrl, sync.Key), RelayState = sync == null ? "off" : "on" });
     }
 
-    private string Serve()
+    private PhoneSnapshot.Extras Extras(bool detailed, int trendPoints)
+    {
+        PhoneSnapshot.Extras basis;
+        try { basis = ExtrasProvider?.Invoke() ?? PhoneSnapshot.Extras.None; } catch { basis = PhoneSnapshot.Extras.None; }
+        return basis with { Detailed = detailed, TrendPoints = trendPoints };
+    }
+
+    private string Serve(bool detailed)
     {
         // Several phones refreshing together share one build; readings change at most once a poll interval.
-        if (_served is { } cached && DateTimeOffset.UtcNow - cached.At < TimeSpan.FromSeconds(3)) return cached.Json;
-        var json = BuildJson();
-        _served = new Served(DateTimeOffset.UtcNow, json);
+        if (_served is { } cached && cached.Detailed == detailed && DateTimeOffset.UtcNow - cached.At < TimeSpan.FromSeconds(3)) return cached.Json;
+        var json = BuildJson(detailed: detailed);
+        _served = new Served(DateTimeOffset.UtcNow, detailed, json);
         return json;
+    }
+
+    private async Task<string> Refresh()
+    {
+        var state = RefreshRequested is { } refresh ? await refresh() : "throttled";
+        _served = null;
+        return state;
+    }
+
+    private string? MergeSettings(string body)
+    {
+        try
+        {
+            if (System.Text.Json.Nodes.JsonNode.Parse(body) is not System.Text.Json.Nodes.JsonObject root || root["shared"] is not System.Text.Json.Nodes.JsonObject shared) return null;
+            if (SettingsReceived?.Invoke(shared) is not { } merged) return null;
+            _served = null;
+            return new System.Text.Json.Nodes.JsonObject { ["shared"] = merged }.ToJsonString();
+        }
+        catch (JsonException) { return null; }
     }
 
     public async Task<bool> StartAsync(int port = PhoneIdentity.Port, bool loopbackOnly = false)
@@ -150,7 +225,7 @@ public sealed class PhoneLinkService : IAsyncDisposable
         try
         {
             if (_server != null || _disposed) return _server != null;
-            var server = new PhoneServer(EnsureIdentity(), Serve);
+            var server = new PhoneServer(EnsureIdentity(), Serve, Refresh, MergeSettings);
             try { await server.Start(port, loopbackOnly); }
             catch
             {
@@ -245,8 +320,8 @@ public sealed class PhoneLinkService : IAsyncDisposable
             if (_identity?.Sync is not { } sync || (!force && sync == _rejected)) return false;
             var now = DateTimeOffset.UtcNow;
             if (!force && now - _uploadedAt < TimeSpan.FromMinutes(1)) return false;
-            var snapshot = await Task.Run(() => PhoneSnapshot.FromLive(_live, _settings, _history, _database, 192));
-            var fingerprint = sync.Key + "|" + string.Join(";", snapshot.Providers.Select(p => p.Id + ":" + p.Status + ":" + string.Join(",", p.Windows.Select(w => $"{w.Id}={w.Used:0.####}/{w.Reset}"))));
+            var snapshot = await Task.Run(() => PhoneSnapshot.FromLive(_live, _settings, _history, _database, 192, extras: Extras(true, 160)));
+            var fingerprint = sync.Key + "|" + _settings.Shared.Values.Select(e => e.At).DefaultIfEmpty().Max() + "|" + string.Join(";", snapshot.Providers.Select(p => p.Id + ":" + p.Status + ":" + string.Join(",", p.Windows.Select(w => $"{w.Id}={w.Used:0.####}/{w.Reset}"))));
             if (!force && fingerprint == _uploadedFingerprint && now - _uploadedAt < TimeSpan.FromMinutes(15)) return false;
             await _publisher.Push(sync, RelayCrypto.Seal(sync.KeyBytes, PhoneSnapshot.Serialize(snapshot)));
             _uploadedFingerprint = fingerprint; _uploadedAt = now; _rejected = null;

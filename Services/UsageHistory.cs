@@ -198,4 +198,45 @@ public sealed class UsageHistory
         catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException) { Error = "History overview is temporarily unavailable."; }
         return points;
     }
+
+    public string FilePath => _path;
+    public long Bytes() { try { var f = new FileInfo(_path); return f.Exists ? f.Length : 0; } catch { return 0; } }
+
+    /// <summary>How many readings and events are stored, and the oldest reading.</summary>
+    public (long Readings, long Events, DateTimeOffset? Since) Counts()
+    {
+        try
+        {
+            using var connection = Open(); using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT (SELECT COUNT(*) FROM observations), (SELECT COUNT(*) FROM history_events), (SELECT MIN(at) FROM observations)";
+            using var r = cmd.ExecuteReader(); r.Read();
+            return (r.GetInt64(0), r.GetInt64(1), r.IsDBNull(2) ? null : DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(2)));
+        }
+        catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException) { return (0, 0, null); }
+    }
+
+    /// <summary>Rebuilds the database file to reclaim space. Readings are kept.</summary>
+    public bool Compact()
+    {
+        try { using var connection = Open(); using var cmd = connection.CreateCommand(); cmd.CommandText = "VACUUM"; cmd.ExecuteNonQuery(); return true; }
+        catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException) { return false; }
+    }
+
+    /// <summary>Writes every reading as CSV (provider, window, ISO time, used fraction, reset). Account keys are left out.</summary>
+    public int ExportCsv(string file)
+    {
+        using var connection = Open(); using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT provider, window, at, used, reset FROM observations ORDER BY provider, window, at";
+        using var r = cmd.ExecuteReader();
+        using var writer = new StreamWriter(file, false, new UTF8Encoding(false));
+        writer.WriteLine("provider,window,time,used,reset");
+        var rows = 0;
+        while (r.Read())
+        {
+            var reset = r.IsDBNull(4) ? "" : DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(4)).ToString("o");
+            writer.WriteLine($"{r.GetString(0)},{r.GetString(1)},{DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(2)):o},{r.GetDouble(3).ToString(System.Globalization.CultureInfo.InvariantCulture)},{reset}");
+            rows++;
+        }
+        return rows;
+    }
 }

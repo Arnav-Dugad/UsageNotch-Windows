@@ -26,10 +26,14 @@ internal static class WorkspaceChecks
         if (window.ResizeMode != ResizeMode.CanResize || window.AllowsTransparency || window.Owner is not null)
             throw new Exception("Dashboard cannot independently resize/minimize.");
         var dashboard = (UsageNotch.Controls.StatsDashboard)window.FindName("StatsView");
-        var cards = (WrapPanel)dashboard.FindName("Cards");
-        if (!cards.Children.OfType<UsageNotch.Controls.ProviderStatsCard>().Select(c => c.ProviderId).Contains("claude") ||
-            !cards.Children.OfType<UsageNotch.Controls.ProviderStatsCard>().Select(c => c.ProviderId).Contains("codex"))
-            throw new Exception("Comparison omitted a provider.");
+        foreach (var id in new[] { "claude", "codex" })
+        {
+            dashboard.Open(id, null);
+            if (!dashboard.DetailOpen) throw new Exception($"Overview could not open {id}.");
+            dashboard.CloseDetail();
+        }
+        var tabs = (TabControl)window.FindName("SettingsTabs");
+        if (tabs.Items.Count != 12 || ((TabItem)tabs.Items[9]).Name != "PhoneTab") throw new Exception("Workspace pages are out of order.");
         var reset = new LimitWindow("test", "5-hour window", .2, DateTimeOffset.UtcNow.AddHours(1));
         if (!reset.ResetLocalText.Contains(reset.ResetsAt!.Value.ToLocalTime().ToString("HH:mm:ss zzz"))) throw new Exception("Exact local reset missing offset or seconds.");
         window.Close(); dock.Close();

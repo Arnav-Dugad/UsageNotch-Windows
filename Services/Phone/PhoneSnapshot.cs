@@ -15,7 +15,7 @@ public static class PhoneSnapshot
 {
     public sealed record Point(long At, double Used, string Period);
     /// <summary>The desktop's usage-pace estimate for a window. LimitAt is set when the limit would be reached before the reset.</summary>
-    public sealed record Forecast(string Summary, double? Rate, double? Projected, long? LimitAt, string Confidence);
+    public sealed record Forecast(string Summary, double? Rate, double? Projected, long? LimitAt, string Confidence, double? LowRate = null, double? HighRate = null);
     public sealed record Window(string Id, string Label, double Used, long At, long? Reset, List<Point> Points,
         string? Detail = null, double? UsedAmount = null, double? LimitAmount = null, string? Unit = null, Forecast? Forecast = null);
     /// <summary>A reported limit without a percentage, such as credits with no monthly cap. Older apps ignore it.</summary>
@@ -28,22 +28,44 @@ public static class PhoneSnapshot
     /// with usage, and 90 days of daily consumption for the calendar (a separate field, so Android 1.3 still reads Days).
     /// Consumption is the sum of increases between continuous readings; gaps and resets add nothing and are never guessed.
     /// </summary>
-    public sealed record History(string Window, string Label, List<Day> Days, List<double> Heat, List<int> Observed, int Streak, List<Day>? Calendar = null);
+    public sealed record History(string Window, string Label, List<Day> Days, List<double> Heat, List<int> Observed, int Streak, List<Day>? Calendar = null,
+        List<Point>? Trend = null, List<Unused>? Unused = null, List<Hit>? Hits = null, Reliability? Reliability = null, List<Event>? Events = null, List<Session>? Sessions = null);
+    // Protocol 2 insights (docs/PHONE-PROTOCOL.md). Older phones ignore them.
+    public sealed record Unused(long End, double Peak);
+    public sealed record Hit(long At, long? Reset);
+    public sealed record Reliability(int Periods, int Fixed, int Moved, double AverageShiftMinutes, int Confirmed, int Changed);
+    public sealed record Event(long At, string Kind, string Text);
+    public sealed record Session(long Start, long End, double Used, double Peak);
     public sealed record Provider(string Id, string Name, string Status, List<Window> Windows,
         string? StatusText = null, string? Account = null, long? UpdatedAt = null, string? ManageUrl = null,
-        string? Session = null, string? Weekly = null, List<Extra>? Extras = null, List<History>? History = null);
+        string? Session = null, string? Weekly = null, List<Extra>? Extras = null, List<History>? History = null,
+        string? Kind = null, string? AccountLabel = null);
+    public sealed record IncidentInfo(string Provider, string Title, string Impact, string Status, string? Url, long UpdatedAt);
+    public sealed record Totals(long Input, long Output, long CacheRead, long CacheWrite, long Total, double? Cost);
+    public sealed record TokenDay(string Date, long Total, double? Cost);
+    public sealed record ShareInfo(string Name, long Total, double? Cost, double Share);
+    public sealed record TokenSource(string Id, string Label, Totals Today, Totals Week, List<TokenDay> Days, List<ShareInfo> Projects, List<ShareInfo> Models);
+    public sealed record TokenInfo(long UpdatedAt, List<TokenSource> Sources);
+    /// <summary>What a snapshot carries beyond the dock: protocol 2's heavier fields, local tokens and status-page incidents.</summary>
+    public sealed record Extras(bool Detailed, IReadOnlyList<TokenReport> Tokens, IReadOnlyList<Services.Incident> Incidents, bool ShareProjects, int TrendPoints = 400)
+    {
+        public static readonly Extras None = new(false, [], [], false);
+    }
+    public static readonly string[] Features = ["refresh", "settings", "trend", "insights", "tokens", "incidents", "accounts"];
     /// <summary>Internet sync details for a paired phone. Only ever sent over the pinned, authenticated local link.</summary>
     public sealed record RelayInfo(string Url, string Key);
     public sealed record Snapshot(int Schema, long GeneratedAt, List<Provider> Providers, string? Source = null, string? AppVersion = null,
-        RelayInfo? Relay = null, string? RelayState = null);
+        RelayInfo? Relay = null, string? RelayState = null, int? Protocol = null, string[]? Features = null,
+        System.Text.Json.Nodes.JsonObject? Shared = null, List<IncidentInfo>? Incidents = null, TokenInfo? Tokens = null);
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
     public const int MaxProviders = 16, MaxWindows = 32, MaxPoints = 512, HistoryDays = 30, CalendarDays = 90;
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTimeOffset At, History Value)> HistoryCache = new();
 
     /// <summary>Builds from the running app's latest provider readings, with 24 hours of recorded history per window and, when asked, 30-day summaries.</summary>
-    public static Snapshot FromLive(IReadOnlyList<ProviderSnapshot> live, AppSettings settings, UsageHistory history, string? database, int maxPoints = MaxPoints, bool summaries = true)
+    public static Snapshot FromLive(IReadOnlyList<ProviderSnapshot> live, AppSettings settings, UsageHistory history, string? database, int maxPoints = MaxPoints, bool summaries = true, Extras? extras = null)
     {
+        extras ??= Extras.None;
         var now = DateTimeOffset.UtcNow;
         var fallback = new Lazy<Snapshot?>(() => { try { return database == null ? null : FromDatabase(database, maxPoints); } catch { return null; } });
         var providers = new List<Provider>();
@@ -59,12 +81,12 @@ public static class PhoneSnapshot
             var at = (snapshot.FetchedAt ?? now).ToUnixTimeMilliseconds();
             string account;
             lock (history) account = history.AccountKey(snapshot);
-            var windows = new List<Window>(); var extras = new List<Extra>();
+            var windows = new List<Window>(); var unlimited = new List<Extra>();
             foreach (var w in snapshot.Windows.Take(MaxWindows))
             {
                 var reset = w.ResetsAt?.ToUnixTimeMilliseconds();
                 if (w.UsedFraction is not { } used || !double.IsFinite(used) || used < 0 || used > 1000)
-                { extras.Add(new Extra(w.Id, w.Label, w.Detail, reset, Finite(w.UsedAmount), Finite(w.LimitAmount), w.Unit)); continue; }
+                { unlimited.Add(new Extra(w.Id, w.Label, w.Detail, reset, Finite(w.UsedAmount), Finite(w.LimitAmount), w.Unit)); continue; }
                 IReadOnlyList<UsagePoint> raw;
                 lock (history) raw = history.Read(snapshot.Id, account, w.Id, DateTimeOffset.FromUnixTimeMilliseconds(at).AddHours(-24));
                 var points = raw.Where(p => double.IsFinite(p.Used) && p.Used >= 0 && p.Used <= 1000).Select(p => new Point(p.At.ToUnixTimeMilliseconds(), p.Used, p.Period)).ToList();
@@ -76,14 +98,27 @@ public static class PhoneSnapshot
             var weekly = view.WeeklyWindow is { UsedFraction: not null } wk && wk.Id != session?.Id ? wk : null;
             List<History>? summary = null;
             if (summaries)
-                summary = new[] { session, weekly }.Where(x => x != null).Select(x => HistoryFor(history, snapshot.Id, account, x!, now)).Where(h => h != null).Select(h => h!).ToList();
+                summary = new[] { session, weekly }.Where(x => x != null).Select(x => HistoryFor(history, snapshot.Id, account, x!, now, extras)).Where(h => h != null).Select(h => h!).ToList();
             providers.Add(new Provider(snapshot.Id, snapshot.DisplayName, snapshot.Status.ToString(), windows,
                 string.IsNullOrWhiteSpace(snapshot.StatusText) ? null : snapshot.StatusText,
                 settings.ShowAccountNames && !string.IsNullOrWhiteSpace(snapshot.AccountName) ? snapshot.AccountName : null,
                 snapshot.FetchedAt?.ToUnixTimeMilliseconds(), ManageUrl(snapshot.ManageUrl),
-                session?.Id, weekly?.Id, extras.Count == 0 ? null : extras, summary is { Count: > 0 } ? summary : null));
+                session?.Id, weekly?.Id, unlimited.Count == 0 ? null : unlimited, summary is { Count: > 0 } ? summary : null,
+                ProviderKind.Of(snapshot.Id), settings.Accounts.FirstOrDefault(a => a.ProviderId == snapshot.Id) is { } extra ? (string.IsNullOrWhiteSpace(extra.Label) ? extra.Slug : extra.Label.Trim()) : null));
         }
-        return new Snapshot(1, now.ToUnixTimeMilliseconds(), providers, "windows-app", AppVersion());
+        return new Snapshot(1, now.ToUnixTimeMilliseconds(), providers, "windows-app", AppVersion(), Protocol: 2, Features: Features,
+            Shared: SharedSettings.ToJson(settings),
+            Incidents: extras.Incidents.Count == 0 ? null : extras.Incidents.Take(8).Select(i => new IncidentInfo(i.Provider, i.Title, i.Impact, i.Status, i.Url, i.UpdatedAt.ToUnixTimeMilliseconds())).ToList(),
+            Tokens: extras.Tokens.Count == 0 ? null : new TokenInfo(now.ToUnixTimeMilliseconds(), extras.Tokens.Select(r => TokensFor(r, extras.ShareProjects)).ToList()));
+    }
+
+    private static TokenSource TokensFor(TokenReport r, bool projects)
+    {
+        static Totals T(TokenTotals t) => new(t.Input, t.Output, t.CacheRead, t.CacheWrite, t.Total, t.Cost is { } c ? Math.Round(c, 4) : null);
+        static List<ShareInfo> S(IEnumerable<TokenShare> list) => list.Select(x => new ShareInfo(x.Name, x.Total, x.Cost is { } c ? Math.Round(c, 4) : null, Math.Round(x.Share, 4))).ToList();
+        return new TokenSource(r.Source, r.Label, T(r.Today), T(r.Week),
+            r.Days.Select(d => new TokenDay(d.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), d.Total, d.Cost is { } c ? Math.Round(c, 4) : null)).ToList(),
+            projects ? S(r.Projects) : [], S(r.Models));
     }
 
     /// <summary>The dock's own forecast, with the time the limit would be reached when that comes before the reset.</summary>
@@ -98,45 +133,49 @@ public static class PhoneSnapshot
             var eta = last.At.AddHours((1 - last.Used) / (rate / 100));
             if (eta < reset) limitAt = eta.ToUnixTimeMilliseconds();
         }
-        return new Forecast(f.Summary, f.PercentPerHour, f.ProjectedPercent, limitAt, f.Confidence);
+        // Low and high rates (percentage points an hour) are the 10th–90th percentile observed paces: the explorer's band.
+        return new Forecast(f.Summary, f.PercentPerHour, f.ProjectedPercent, limitAt, f.Confidence, f.LowRate is { } low ? Math.Round(low * 100, 3) : null, f.HighRate is { } high ? Math.Round(high * 100, 3) : null);
     }
 
-    private static History? HistoryFor(UsageHistory history, string provider, string account, LimitWindow window, DateTimeOffset now)
+    private static History? HistoryFor(UsageHistory history, string provider, string account, LimitWindow window, DateTimeOffset now, Extras extras)
     {
-        var key = provider + "|" + account + "|" + window.Id;
-        if (HistoryCache.TryGetValue(key, out var cached) && now - cached.At < TimeSpan.FromMinutes(10)) return cached.Value with { Label = window.Label };
-        IReadOnlyList<UsagePoint> points;
-        lock (history) points = history.Read(provider, account, window.Id, now.AddDays(-CalendarDays - 1));
+        var key = provider + "|" + account + "|" + window.Id + "|" + extras.Detailed + extras.TrendPoints;
+        if (HistoryCache.TryGetValue(key, out var cached) && now - cached.At < TimeSpan.FromMinutes(2)) return cached.Value with { Label = window.Label };
+        IReadOnlyList<UsagePoint> points; IReadOnlyList<UsageEvent> events;
+        lock (history)
+        {
+            points = history.Read(provider, account, window.Id, now.AddDays(-CalendarDays - 1));
+            events = history.ReadEvents(provider, account, window.Id, now.AddDays(-30));
+        }
         if (points.Count == 0) return null;
-        var value = Aggregate(window.Id, window.Label, points, now);
+        var summary = HistoryInsights.Summarize(points, events, now);
+        var value = new History(window.Id, window.Label, Days(summary.Days), summary.Heat.ToList(), summary.Observed.ToList(), summary.Streak, Days(summary.Calendar),
+            Unused: summary.Unused.Select(u => new Unused(u.End.ToUnixTimeMilliseconds(), Math.Round(u.Peak, 4))).ToList(),
+            Hits: summary.Hits.Select(h => new Hit(h.At.ToUnixTimeMilliseconds(), h.Reset?.ToUnixTimeMilliseconds())).ToList(),
+            Reliability: new Reliability(summary.Reliability.Periods, summary.Reliability.Fixed, summary.Reliability.Moved, summary.Reliability.AverageShiftMinutes, summary.Reliability.Confirmed, summary.Reliability.Changed));
+        if (extras.Detailed)
+        {
+            var week = points.Where(p => p.At >= now.AddDays(-7)).ToList();
+            var trend = week.Where(p => double.IsFinite(p.Used) && p.Used is >= 0 and <= 1000).Select(p => new Point(p.At.ToUnixTimeMilliseconds(), Math.Round(p.Used, 4), p.Period)).ToList();
+            Thin(trend, extras.TrendPoints);
+            value = value with
+            {
+                Trend = trend,
+                Events = events.Where(e => e.At >= now.AddDays(-7)).TakeLast(30).Select(e => new Event(e.At.ToUnixTimeMilliseconds(), e.Kind, e.Explanation.Length > 240 ? e.Explanation[..240] : e.Explanation)).ToList(),
+                Sessions = UsageAnalytics.Sessions(week, events).Select(x => new Session(x.Start.ToUnixTimeMilliseconds(), x.End.ToUnixTimeMilliseconds(), Math.Round(x.Consumption, 2), Math.Round(x.PeakPace, 2))).ToList(),
+            };
+        }
         HistoryCache[key] = (now, value);
         return value;
     }
 
+    private static List<Day> Days(IEnumerable<DayUsage> days) => days.Select(d => new Day(d.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), d.Used is { } u ? Math.Round(u, 4) : null)).ToList();
+
     /// <summary>Daily consumption (30 and 90 days), a 30-day weekday x hour heatmap and the streak from raw readings, in this PC's local time.</summary>
     public static History Aggregate(string window, string label, IReadOnlyList<UsagePoint> points, DateTimeOffset now)
     {
-        var today = now.ToLocalTime().Date; var heatFrom = today.AddDays(-HistoryDays + 1);
-        var consumed = new Dictionary<DateTime, double>(); var observed = new HashSet<DateTime>();
-        var heat = new double[168]; var hours = new int[168]; var seenHours = new HashSet<(DateTime, int)>();
-        for (var i = 0; i < points.Count; i++)
-        {
-            var local = points[i].At.ToLocalTime(); var cell = (int)local.DayOfWeek * 24 + local.Hour;
-            var recent = local.Date >= heatFrom;
-            observed.Add(local.Date);
-            if (recent && seenHours.Add((local.Date, local.Hour))) hours[cell]++;
-            if (i == 0 || !UsageAnalytics.Continuous(points[i - 1], points[i])) continue;
-            var delta = Math.Max(0, points[i].Used - points[i - 1].Used);
-            consumed[local.Date] = consumed.GetValueOrDefault(local.Date) + delta;
-            if (recent) heat[cell] += delta;
-        }
-        List<Day> Range(int count) => Enumerable.Range(0, count).Select(i => today.AddDays(i - count + 1))
-            .Select(d => new Day(d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), observed.Contains(d) ? Math.Round(consumed.GetValueOrDefault(d), 4) : null)).ToList();
-        var days = Range(HistoryDays);
-        bool Used(DateTime d) => observed.Contains(d) && consumed.GetValueOrDefault(d) > .0001;
-        var streak = 0; var cursor = Used(today) ? today : today.AddDays(-1);
-        while (Used(cursor)) { streak++; cursor = cursor.AddDays(-1); }
-        return new History(window, label, days, heat.Select(v => Math.Round(v, 4)).ToList(), hours.ToList(), streak, Range(CalendarDays));
+        var summary = HistoryInsights.Summarize(points, [], now);
+        return new History(window, label, Days(summary.Days), summary.Heat.ToList(), summary.Observed.ToList(), summary.Streak, Days(summary.Calendar));
     }
 
     private static double? Finite(double? value) => value is { } v && double.IsFinite(v) ? v : null;
@@ -188,7 +227,7 @@ public static class PhoneSnapshot
     {
         "five_hour" => "Current session", "seven_day" => "All models", "seven_day_opus" => "Opus weekly", "seven_day_sonnet" => "Sonnet weekly", "extra_usage" => "Usage credits",
         "month_cost" => "This month's API spend", "on_demand" => "On demand",
-        "codex-primary" when provider == "codex" => "Primary window", "codex-secondary" when provider == "codex" => "Secondary window",
+        "codex-primary" when ProviderKind.Of(provider) == "codex" => "Primary window", "codex-secondary" when ProviderKind.Of(provider) == "codex" => "Secondary window",
         _ when window.EndsWith("-primary") => window[..^8].Replace('_', ' ') + " · primary",
         _ when window.EndsWith("-secondary") => window[..^10].Replace('_', ' ') + " · secondary",
         _ => window.Replace('_', ' ').Replace('-', ' ')

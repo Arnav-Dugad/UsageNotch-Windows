@@ -162,7 +162,8 @@ public partial class MainWindow : Window
     }
 
     private string ProviderSignature() =>
-        $"{_settings.ClaudeEnabled}{_settings.CodexEnabled}{_settings.GeminiEnabled}{_settings.CursorEnabled}{_settings.OpenAiApiEnabled}{_settings.AnthropicApiEnabled}{_settings.GeminiUseCloudProject}";
+        $"{_settings.ClaudeEnabled}{_settings.CodexEnabled}{_settings.GeminiEnabled}{_settings.CursorEnabled}{_settings.OpenAiApiEnabled}{_settings.AnthropicApiEnabled}{_settings.GeminiUseCloudProject}" +
+        string.Join(",", _settings.Accounts.Select(a => a.ProviderId + a.Enabled + a.Folder + a.Label)) + "|" + string.Join(",", _settings.ProviderOrder);
 
     // ---------------------------------------------------------------- geometry helpers
 
@@ -678,7 +679,7 @@ public partial class MainWindow : Window
     private void Cell_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (_dragging || e.Handled) return;
-        if (sender is Border { DataContext: ProviderViewModel { Id: "gemini", Status: SnapshotStatus.NeedsAuth } })
+        if (sender is Border { DataContext: ProviderViewModel { Kind: "gemini", Status: SnapshotStatus.NeedsAuth } })
         {
             OpenSettings();
             return;
@@ -695,7 +696,7 @@ public partial class MainWindow : Window
 
     private void GeminiHelp_Click(object sender, RoutedEventArgs e)
     {
-        if (PopupCard.DataContext is ProviderViewModel { Id: "claude" })
+        if (PopupCard.DataContext is ProviderViewModel { Kind: "claude" })
             System.Windows.MessageBox.Show(this,
                 "1. Open VS Code.\n2. Open the Claude Code extension.\n3. Sign in if prompted, or type /login in Claude Code.\n4. Return here and press Refresh.\n\nYour Claude desktop-app login is separate. No API key or payment is required to read subscription usage. A 429 means wait, not sign in again.",
                 "Reconnect Claude", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -1070,6 +1071,15 @@ public partial class MainWindow : Window
         var window = new SettingsWindow(_settings, _coordinator);
         _settingsWindow = window;
         window.SettingsChanged += Settings_Changed;
+        window.PersistRequested += mutate =>
+        {
+            // Saved at once (budgets, colours, accounts, order): apply to the copy Cancel restores, and save that copy,
+            // so other unsaved edits stay unsaved.
+            mutate(snapshot); mutate(_settings);
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            SharedSettings.Capture(snapshot, now); SharedSettings.Capture(_settings, now);
+            if (!_settings.ReviewSession) SettingsStore.Save(snapshot);
+        };
         window.Closed += (_, _) =>
         {
             window.SettingsChanged -= Settings_Changed;
@@ -1078,6 +1088,7 @@ public partial class MainWindow : Window
             _settings.LiveEdit = false;
             if (window.Committed)
             {
+                SharedSettings.Capture(_settings, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                 SettingsStore.Save(_settings);
                 _coordinator.Alerts.Reprime();
             }
