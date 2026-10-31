@@ -16,7 +16,7 @@ public static class TokenViews
         Grid Tile(string label, TokenTotals t)
         {
             var value = Ui.Text(Ui.Tokens(t.Total), 26, FontWeights.Light, "Ui.Text", false);
-            var cost = Ui.Text(t.Cost is { } c ? $"≈ {Ui.Money(c)} at API prices" : "tokens", 11.5, FontWeights.Normal, "Ui.Muted", false);
+            var cost = Ui.Text(t.Cost is { } c ? $"≈ {Ui.Money(c)} at API prices" : r.AllDevices ? "tokens, all devices" : "tokens", 11.5, FontWeights.Normal, "Ui.Muted", false);
             var grid = new Grid(); grid.Children.Add(Ui.Inner(Ui.Stack(Ui.Text(label, 11.5, FontWeights.SemiBold, "Ui.Faint", false), value, cost), new Thickness(14, 10, 14, 12)));
             grid.Margin = new Thickness(0, 0, 10, 10);
             grid.ToolTip = $"Input {Ui.Tokens(t.Input)} · output {Ui.Tokens(t.Output)} · cache read {Ui.Tokens(t.CacheRead)} · cache write {Ui.Tokens(t.CacheWrite)}";
@@ -43,7 +43,15 @@ public static class TokenViews
             stack.Children.Add(Section("Models · last 7 days"));
             stack.Children.Add(ShareList.Build(r.Models.Select(x => (x.Name, x.Share, Ui.Tokens(x.Total) + (x.Cost is { } c ? $" · {Ui.Money(c)}" : ""))), Palette.Lerp(accent, Theme.Current.Text, .25), reduced));
         }
-        var note = Ui.Text("From the transcripts Claude Code and Codex keep on this PC. API-price equivalent: what the same tokens would cost on the pay-as-you-go API, not what your subscription charges.", 11, FontWeights.Normal, "Ui.Faint");
+        if (r.AllDevices && (r.Lifetime is not null || r.PeakDaily is not null))
+        {
+            var facts = Ui.Text($"Lifetime {Ui.Tokens(r.Lifetime ?? 0)} tokens" + (r.PeakDaily is { } peak ? $" · busiest day {Ui.Tokens(peak)}" : "") + (r.LongestStreak is { } streak ? $" · longest streak {streak} days" : ""), 12, FontWeights.Normal, "Ui.Muted");
+            facts.Margin = new Thickness(0, 0, 0, 8);
+            stack.Children.Insert(1, facts);
+        }
+        var note = Ui.Text(r.AllDevices
+            ? "Totals come from OpenAI for this account, across every device. Projects and models come from the Codex transcripts on this PC."
+            : "From the transcripts Claude Code and Codex keep on this PC. API-price equivalent: what the same tokens would cost on the pay-as-you-go API, not what your subscription charges.", 11, FontWeights.Normal, "Ui.Faint");
         note.Margin = new Thickness(0, 4, 0, 0);
         stack.Children.Add(note);
         return stack;

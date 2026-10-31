@@ -7,6 +7,23 @@ public sealed record PatternCell(string Label, double? Pace, double CoveredHours
 public static class UsageAnalytics
 {
     public static bool Continuous(UsagePoint a, UsagePoint b) => a.Period == b.Period && b.At > a.At && b.At - a.At <= TimeSpan.FromMinutes(20) && b.Used >= a.Used - .0001;
+
+    /// <summary>
+    /// Usage consumed between two readings of one limit, and whether its timing is known. Within a period it is the rise
+    /// between them, even across a gap (the PC slept, but the rise is still exact). After a renewal (the old reset passed,
+    /// or usage dropped) it is the new reading itself: everything used since the limit restarted at zero. Only usage before
+    /// a renewal that happened during a gap is unknowable, and nothing is guessed for it.
+    /// </summary>
+    public static (double Used, bool Timed) Consumed(UsagePoint a, UsagePoint b)
+    {
+        if (b.At <= a.At) return (0, false);
+        var timed = b.At - a.At <= TimeSpan.FromMinutes(20);
+        var renewed = a.Reset is { } oldReset && oldReset <= b.At + TimeSpan.FromMinutes(1) && (b.Reset is null || b.Reset > oldReset.AddMinutes(2));
+        // A big drop is a renewal; a small one is the provider's rounding and adds nothing.
+        if (renewed || b.Used < a.Used - .1) return (Math.Max(0, b.Used), false);
+        if (b.Used < a.Used) return (0, timed && a.Period == b.Period);
+        return (Math.Max(0, b.Used - a.Used), timed && a.Period == b.Period);
+    }
     public static IReadOnlyList<ObservedSession> Sessions(IReadOnlyList<UsagePoint> points, IReadOnlyList<UsageEvent> events)
     {
         var result = new List<ObservedSession>();

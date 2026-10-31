@@ -39,7 +39,7 @@ Optional **internet sync** brings readings to your phone on mobile data and keep
 
 ## For development
 
-**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.6.1**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
+**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.7.0**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
 
 2.2 simplifies Stats and adds customizable dock text, animated sample previews and clean AM/PM clocks. Reset times appear in expanded cards by default; collapsed-dock reset labels are optional. Claude and Codex remain visible together, with unlimited local history and explainable estimates. Download the latest app from [GitHub Releases](https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest).
 

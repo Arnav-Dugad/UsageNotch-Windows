@@ -490,6 +490,18 @@ public static class Ui
             System.Threading.SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext(owner.Dispatcher));
     }
 
+    /// <summary>Usage in "limits": under one limit as a percentage ("48%"), from one up as a multiple ("1.6×").</summary>
+    public static string Limits(double? fraction) => fraction is not { } f ? "—" : f >= .995 ? $"{f:0.#}×" : $"{Math.Round(f * 100):0}%";
+
+    /// <summary>A small, quiet badge for the subscription ("Max 5×", "Edu").</summary>
+    public static Border PlanBadge(string plan)
+    {
+        var badge = new Border { CornerRadius = new CornerRadius(6), Padding = new Thickness(7, 2, 7, 2), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = Text(plan, 10.5, FontWeights.SemiBold, "Ui.Muted", false), ToolTip = "Plan reported by the provider" };
+        badge.SetResourceReference(Border.BackgroundProperty, "Ui.Inner");
+        badge.SetResourceReference(Border.BorderBrushProperty, "Ui.Hairline");
+        return badge;
+    }
+
     public static string Percent(double? fraction) => fraction is { } f ? $"{Math.Round(Math.Clamp(f, 0, 9.99) * 100):0}%" : "—";
     public static string Tokens(long n) => n switch { >= 1_000_000_000 => $"{n / 1e9:0.##}B", >= 1_000_000 => $"{n / 1e6:0.#}M", >= 10_000 => $"{n / 1e3:0}K", >= 1000 => $"{n / 1e3:0.#}K", _ => n.ToString("N0") };
     public static string Money(double? usd) => usd is { } v ? v >= 100 ? $"${v:N0}" : $"${v:0.00}" : "—";

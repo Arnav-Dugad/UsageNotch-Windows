@@ -16,6 +16,7 @@ public sealed class CursorSubscriptionProvider : IUsageProvider
         var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Cursor", "User", "globalStorage", "state.vscdb");
         if (!File.Exists(dbPath)) return NeedsAuth("Cursor is not installed or has not created its local state database.");
         string? token = null, accountId = null;
+        string? membership = null;
         try
         {
             var cs = new SqliteConnectionStringBuilder { DataSource = dbPath, Mode = SqliteOpenMode.ReadOnly }.ToString();
@@ -23,6 +24,7 @@ public sealed class CursorSubscriptionProvider : IUsageProvider
             await db.OpenAsync(ct);
             token = await ReadValue(db, "cursorAuth/accessToken", ct);
             accountId = await ReadValue(db, "cursorAuth/stripeMembershipAuthId", ct);
+            membership = await ReadValue(db, "cursorAuth/stripeMembershipType", ct);
         }
         catch (Exception ex) { return Error("Could not read Cursor state: " + ex.Message); }
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(accountId)) return NeedsAuth("Sign in to Cursor first.");
@@ -56,12 +58,22 @@ public sealed class CursorSubscriptionProvider : IUsageProvider
                 }
             }
             if (windows.Count == 0) return Error("Cursor returned no metered usage for this account.");
+            if (root.TryGetProperty("membershipType", out var type) && type.ValueKind == JsonValueKind.String) membership = type.GetString();
             return new ProviderSnapshot(Id, DisplayName, "⌾", Fidelity.Official, SnapshotStatus.Ok, windows,
-                ManageUrl: "https://cursor.com/dashboard", FetchedAt: DateTimeOffset.Now);
+                ManageUrl: "https://cursor.com/dashboard", FetchedAt: DateTimeOffset.Now, Plan: PlanName(membership));
         }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested) { return Error("Cursor request timed out."); }
         catch (Exception ex) { return Error(ex.Message); }
     }
+
+    /// <summary>"Pro", "Business", "Ultra"… from Cursor's own membership type.</summary>
+    public static string? PlanName(string? membership) => membership?.Trim().ToLowerInvariant() switch
+    {
+        null or "" => null,
+        "free" or "free_trial" => membership.Contains("trial") ? "Free trial" : "Free",
+        "pro" => "Pro", "pro_plus" or "pro+" => "Pro+", "ultra" => "Ultra", "business" or "team" => "Business", "enterprise" => "Enterprise",
+        var other => char.ToUpperInvariant(other[0]) + other[1..].Replace('_', ' ')
+    };
 
     private static async Task<string?> ReadValue(SqliteConnection db, string key, CancellationToken ct)
     {

@@ -1,4 +1,4 @@
-﻿# UsageNotch 2.6.1 â€” quick start
+﻿# UsageNotch 2.7.0 â€” quick start
 
 ## What's new in 2.6
 

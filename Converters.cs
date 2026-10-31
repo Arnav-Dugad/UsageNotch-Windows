@@ -117,6 +117,8 @@ public sealed class LimitAmountConverter : IValueConverter
         if (value is not LimitWindow window) return "";
         if (!string.IsNullOrWhiteSpace(window.Detail)) return window.Detail!;
         if (window.UsedAmount is not { } used) return "";
+        if (string.Equals(window.Unit, "USD", StringComparison.OrdinalIgnoreCase))
+            return window.LimitAmount is { } dollars ? $"${used:N2} of ${dollars:N2} used" : $"${used:N2} used";
         var unit = string.IsNullOrWhiteSpace(window.Unit) ? "" : " " + window.Unit;
         return window.LimitAmount is { } limit
             ? $"{Format(used)} of {Format(limit)}{unit}"

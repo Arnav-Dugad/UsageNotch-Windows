@@ -42,7 +42,7 @@ public partial class SettingsWindow
         Closed += (_, _) => { _systemTheme?.Dispose(); _statusTimer.Stop(); };
         Ambient.Animate = !Reduced;
 
-        _topTabs = new GlassTabBar(["Overview", "History", "Settings"], 0, 40, 13, ["", "", ""]) { Reduced = Reduced };
+        _topTabs = new GlassTabBar(["Overview", "History", "Settings"], 0, 40, 13, ["\uE80F", "\uE81C", "\uE713"]) { Reduced = Reduced };
         _topTabs.SelectionChanged += index => SettingsTabs.SelectedIndex = index switch { 0 => 0, 1 => 1, _ => _lastSettingsPage };
         TopTabsHost.Content = _topTabs;
 
@@ -159,7 +159,7 @@ public partial class SettingsWindow
         var capsule = new Border { CornerRadius = new CornerRadius(11), Padding = new Thickness(13, 7, 13, 7), BorderThickness = new Thickness(1), Child = Ui.Row(0, _statusDot, _statusText), VerticalAlignment = VerticalAlignment.Center };
         capsule.SetResourceReference(Border.BackgroundProperty, "Ui.Glass");
         capsule.SetResourceReference(Border.BorderBrushProperty, "Ui.Rim");
-        var refresh = Ui.Button("", () => { if (_coordinator is not null) _ = _coordinator.RefreshAllAsync(); }, false, "", Reduced, "Refresh every provider");
+        var refresh = Ui.Button("", () => { if (_coordinator is not null) _ = _coordinator.RefreshAllAsync(); }, false, "\uE72C", Reduced, "Refresh every provider");
         refresh.Margin = new Thickness(8, 0, 0, 0);
         _refreshIcon = Ui.Descendants<TextBlock>(refresh).FirstOrDefault();
         if (_refreshIcon is not null) { _refreshIcon.RenderTransformOrigin = new System.Windows.Point(.5, .5); _refreshIcon.RenderTransform = new RotateTransform(); }
@@ -237,8 +237,8 @@ public partial class SettingsWindow
         for (var i = 0; i < ids.Count; i++)
         {
             var index = i; var p = _coordinator.Items[i];
-            var up = Ui.Button("", () => Move(ids, index, -1), false, "", Reduced, "Move up"); up.Opacity = i == 0 ? .35 : 1; up.IsEnabled = i > 0;
-            var down = Ui.Button("", () => Move(ids, index, 1), false, "", Reduced, "Move down"); down.Opacity = i == ids.Count - 1 ? .35 : 1; down.IsEnabled = i < ids.Count - 1; down.Margin = new Thickness(6, 0, 0, 0);
+            var up = Ui.Button("", () => Move(ids, index, -1), false, "\uE70E", Reduced, "Move up"); up.Opacity = i == 0 ? .35 : 1; up.IsEnabled = i > 0;
+            var down = Ui.Button("", () => Move(ids, index, 1), false, "\uE70D", Reduced, "Move down"); down.Opacity = i == ids.Count - 1 ? .35 : 1; down.IsEnabled = i < ids.Count - 1; down.Margin = new Thickness(6, 0, 0, 0);
             var row = Ui.Columns((Ui.Logo(p.Id, 18, _settings.ColoredLogos), GridLength.Auto), (Ui.Text(p.DisplayName, 13.5, FontWeights.Normal, "Ui.Text", false), new GridLength(1, GridUnitType.Star)), (Ui.Row(0, up, down), GridLength.Auto));
             ((FrameworkElement)row.Children[1]).Margin = new Thickness(12, 0, 0, 0); ((FrameworkElement)row.Children[1]).VerticalAlignment = VerticalAlignment.Center;
             row.Margin = new Thickness(0, 10, 0, 0);
@@ -268,12 +268,12 @@ public partial class SettingsWindow
             var title = Ui.Text(account.DisplayName, 13.5, FontWeights.SemiBold, "Ui.Text", false);
             var detail = Ui.Text((signedIn ? "Signed in · " : "Not signed in yet · ") + account.Folder, 11.5, FontWeights.Normal, "Ui.Faint", false);
             var on = Ui.Switch(account.Enabled, value => { Persist(s => { if (s.Accounts.FirstOrDefault(a => a.Slug == account.Slug) is { } a) a.Enabled = value; }); _coordinator?.RebuildProviders(); _ = _coordinator?.RefreshAllAsync(); }, Reduced, account.DisplayName);
-            var signIn = Ui.Button(signedIn ? "Sign in again" : "Sign in", () => LaunchSignIn(account), !signedIn, "", Reduced);
+            var signIn = Ui.Button(signedIn ? "Sign in again" : "Sign in", () => LaunchSignIn(account), !signedIn, "\uE8D7", Reduced);
             var remove = Ui.Button("", () =>
             {
                 Persist(s => s.Accounts.RemoveAll(a => a.Slug == account.Slug));
                 _coordinator?.RebuildProviders(); BuildManualEditors(); StatsView.Refresh();
-            }, false, "", Reduced, "Remove " + account.DisplayName);
+            }, false, "\uE74D", Reduced, "Remove " + account.DisplayName);
             signIn.Margin = new Thickness(10, 0, 8, 0);
             var row = Ui.Columns((Ui.LogoTile(account.Kind, 32), GridLength.Auto), (Ui.Stack(title, detail), new GridLength(1, GridUnitType.Star)), (Ui.Row(0, on, signIn, remove), GridLength.Auto));
             ((FrameworkElement)row.Children[1]).Margin = new Thickness(12, 0, 8, 0); ((FrameworkElement)row.Children[1]).VerticalAlignment = VerticalAlignment.Center;
@@ -307,12 +307,12 @@ public partial class SettingsWindow
             if (!account.SignedIn) LaunchSignIn(account);
             BuildManualEditors(); StatsView.Refresh();
         }
-        var create = Ui.Button("Add and sign in", () => Add(null), true, "", Reduced);
+        var create = Ui.Button("Add and sign in", () => Add(null), true, "\uE710", Reduced);
         var existing = Ui.Button("Use existing folder…", () =>
         {
             using var dialog = new System.Windows.Forms.FolderBrowserDialog { Description = kind == "codex" ? "Choose a CODEX_HOME folder" : "Choose a Claude Code config folder (it holds .credentials.json)", UseDescriptionForTitle = true };
             if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) Add(dialog.SelectedPath);
-        }, false, "", Reduced);
+        }, false, "\uE8B7", Reduced);
         existing.Margin = new Thickness(8, 0, 0, 0);
         var form = Ui.Stack(Ui.Text("Add an account", 13.5, FontWeights.SemiBold), kinds, Ui.Row(0, name, create, existing), status);
         ((FrameworkElement)form.Children[1]).Margin = new Thickness(0, 10, 0, 2);
@@ -354,20 +354,20 @@ public partial class SettingsWindow
         stack.Children.Add(historyLine);
         var actions = new WrapPanel { Margin = new Thickness(0, 10, 0, 14) };
         var message = Ui.Text("", 12, FontWeights.Normal, "Ui.Accent");
-        actions.Children.Add(Ui.Button("Compact", async () => { message.Text = "Compacting…"; var ok = await Task.Run(() => { lock (history) return history.Compact(); }); message.Text = ok ? "History compacted." : "History is busy; try again in a moment."; Load(); }, false, "", Reduced).WithGap());
+        actions.Children.Add(Ui.Button("Compact", async () => { message.Text = "Compacting…"; var ok = await Task.Run(() => { lock (history) return history.Compact(); }); message.Text = ok ? "History compacted." : "History is busy; try again in a moment."; Load(); }, false, "\uE74C", Reduced).WithGap());
         actions.Children.Add(Ui.Button("Export CSV…", () =>
         {
             var dialog = new Microsoft.Win32.SaveFileDialog { FileName = $"usagenotch-history-{DateTime.Now:yyyy-MM-dd}.csv", Filter = "CSV|*.csv" };
             if (dialog.ShowDialog(this) != true) return;
             try { int rows; lock (history) rows = history.ExportCsv(dialog.FileName); message.Text = $"Exported {rows:N0} readings."; }
             catch (Exception e) { message.Text = "Export failed: " + e.Message; }
-        }, false, "", Reduced).WithGap());
+        }, false, "\uEDE1", Reduced).WithGap());
         stack.Children.Add(actions);
         stack.Children.Add(Ui.Text("Local token history", 13.5, FontWeights.SemiBold));
         stack.Children.Add(tokenLine);
         var tokenActions = new WrapPanel { Margin = new Thickness(0, 10, 0, 8) };
-        tokenActions.Children.Add(Ui.Button("Read new transcripts", async () => { message.Text = "Reading…"; await tokens.ScanAsync(_settings); message.Text = "Up to date."; Load(); }, false, "", Reduced).WithGap());
-        tokenActions.Children.Add(Ui.Button("Start over", async () => { tokens.Reset(); message.Text = "Token history cleared; reading transcripts again…"; await tokens.ScanAsync(_settings); message.Text = "Up to date."; Load(); }, false, "", Reduced).WithGap());
+        tokenActions.Children.Add(Ui.Button("Read new transcripts", async () => { message.Text = "Reading…"; await tokens.ScanAsync(_settings); message.Text = "Up to date."; Load(); }, false, "\uE72C", Reduced).WithGap());
+        tokenActions.Children.Add(Ui.Button("Start over", async () => { tokens.Reset(); message.Text = "Token history cleared; reading transcripts again…"; await tokens.ScanAsync(_settings); message.Text = "Up to date."; Load(); }, false, "\uE777", Reduced).WithGap());
         stack.Children.Add(tokenActions);
         stack.Children.Add(message);
         async void Load()

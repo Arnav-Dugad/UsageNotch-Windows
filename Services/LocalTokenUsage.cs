@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using UsageNotch.Models;
 
 namespace UsageNotch.Services;
 
@@ -15,7 +16,22 @@ public sealed record TokenTotals(long Input, long Output, long CacheRead, long C
 public sealed record TokenShare(string Name, long Total, double? Cost, double Share);
 public sealed record TokenDay(DateTime Date, long Total, double? Cost);
 public sealed record TokenReport(string Source, string Label, TokenTotals Today, TokenTotals Week, IReadOnlyList<TokenDay> Days,
-    IReadOnlyList<TokenShare> Projects, IReadOnlyList<TokenShare> Models, long[] TodayHours);
+    IReadOnlyList<TokenShare> Projects, IReadOnlyList<TokenShare> Models, long[] TodayHours, bool AllDevices = false, long? Lifetime = null, long? PeakDaily = null, int? LongestStreak = null)
+{
+    /// <summary>
+    /// Replaces totals with the provider's own account-wide counts (every device, not just this PC's transcripts). Projects
+    /// and models stay from this PC, since the provider doesn't break them down.
+    /// </summary>
+    public static TokenReport WithAccount(TokenReport? local, string source, string label, AccountTokens account, DateTimeOffset now)
+    {
+        var today = now.ToLocalTime().Date;
+        var byDate = account.Days.GroupBy(d => d.Date.Date).ToDictionary(g => g.Key, g => g.Sum(x => x.Tokens));
+        var days = Enumerable.Range(0, 30).Select(i => today.AddDays(i - 29)).Select(d => new TokenDay(d, byDate.GetValueOrDefault(d), null)).ToArray();
+        var todayTotal = byDate.GetValueOrDefault(today); var week = days.TakeLast(7).Sum(d => d.Total);
+        return new TokenReport(source, label, new TokenTotals(todayTotal, 0, 0, 0, null), new TokenTotals(week, 0, 0, 0, null), days,
+            local?.Projects ?? [], local?.Models ?? [], local?.TodayHours ?? new long[24], true, account.Lifetime, account.PeakDaily, account.LongestStreak);
+    }
+}
 
 /// <summary>
 /// Token counts from the local transcripts that Claude Code (…/projects/**/*.jsonl) and Codex (…/sessions/**/*.jsonl) keep on

@@ -85,11 +85,13 @@ public sealed class HistoryView : Grid
         else
         {
             var days = sum.Days.TakeLast(_days).ToList();
+            // Plain language: one full limit is 100%; more than that is shown as a multiple (1.6× = one and a bit limits' worth).
             var tiles = new UniformGrid2(4);
             var total = sum.Total(_days); var recorded = sum.Recorded(_days); var busiest = sum.Busiest(_days);
-            tiles.Add(Tile("Total", Ui.Percent(total), $"of the limit in {_days} days"));
-            tiles.Add(Tile("Daily average", total is { } t && recorded > 0 ? Ui.Percent(t / recorded) : "—", $"over {recorded} recorded day{(recorded == 1 ? "" : "s")}"));
-            tiles.Add(Tile("Busiest day", busiest is { } b ? b.Date.ToString("ddd, MMM d") : "—", busiest is { Used: { } bu } ? Ui.Percent(bu) : "no usage recorded"));
+            var limitName = window.Label.ToLowerInvariant();
+            tiles.Add(Tile($"Used in {_days} days", Ui.Limits(total), total is >= .995 ? $"{total:0.#} full {limitName} limits' worth" : $"of one {limitName} limit"));
+            tiles.Add(Tile("On an average day", total is { } t && recorded > 0 ? Ui.Limits(t / recorded) : "—", recorded > 0 ? $"of the limit, over {recorded} day{(recorded == 1 ? "" : "s")} with readings" : "no readings yet"));
+            tiles.Add(Tile("Busiest day", busiest is { } b ? b.Date.ToString("ddd, MMM d") : "—", busiest is { Used: { } bu } ? $"{Ui.Limits(bu)} of the limit" : "no usage recorded"));
             tiles.Add(Tile("Streak", sum.Streak > 0 ? $"{sum.Streak} day{(sum.Streak == 1 ? "" : "s")}" : "—", "in a row with usage"));
             Add(tiles.Panel);
 
@@ -97,13 +99,16 @@ public sealed class HistoryView : Grid
             var dayCard = new Border();
             bars.DayClicked += day => { _openDay = _openDay == day.Date ? null : day.Date; bars.Selected = _openDay; bars.InvalidateVisual(); ShowDay(dayCard, day, sum, data.otherWindows, provider, window); };
             bars.Days = days;
-            Add(Ui.Card(Ui.Stack(Title("", "Daily usage", window.Label), bars, dayCard), accent));
+            var coverage = sum.Coverage(_days);
+            var trust = Ui.Text($"This PC observed {Math.Round(coverage * 100):0}% of these {_days} days. Usage while it was off or asleep is still counted, on the day it next read your usage, so totals stay complete; only the hour it happened is unknown.", 11.5, FontWeights.Normal, "Ui.Faint");
+            trust.Margin = new Thickness(0, 6, 0, 0);
+            Add(Ui.Card(Ui.Stack(Title("\uE9D2", "Daily usage", window.Label + " · 100% = one full limit"), bars, trust, dayCard), accent));
             if (_openDay is { } open && days.FirstOrDefault(d => d.Date == open) is { } openDay) ShowDay(dayCard, openDay, sum, data.otherWindows, provider, window);
 
             var calendar = new CalendarGrid { Accent = accent, Days = sum.Calendar };
             var calendarDay = new Border();
             calendar.DayClicked += day => ShowDay(calendarDay, day, sum, data.otherWindows, provider, window);
-            Add(Ui.Card(Ui.Stack(Title("", "90 days", "outlined days had no readings"), calendar, calendarDay), accent));
+            Add(Ui.Card(Ui.Stack(Title("\uE787", "90 days", "outlined days had no readings"), calendar, calendarDay), accent));
 
             var series = data.others.Where(o => o.Item2 is not null).Select(o => new CompareChart.Series(o.p.DisplayName, o.p.AccentColor, o.Item2!.Days.TakeLast(_days).ToArray())).ToList();
             if (series.Count > 1)
@@ -111,23 +116,23 @@ public sealed class HistoryView : Grid
                 var chart = new CompareChart { Reduced = Reduced, Data = series };
                 var legend = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
                 foreach (var x in series) legend.Children.Add(Ui.Row(7, new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = Palette.Frozen(x.Color), VerticalAlignment = VerticalAlignment.Center }, Ui.Text(x.Name, 12, FontWeights.Normal, "Ui.Muted", false)).WithMargin(new Thickness(0, 0, 16, 0)));
-                Add(Ui.Card(Ui.Stack(Title("", "Side by side", "each provider's main limit"), chart, legend)));
+                Add(Ui.Card(Ui.Stack(Title("\uE9F9", "Side by side", "each provider's main limit"), chart, legend)));
             }
 
             var heat = new HeatGrid { Accent = accent, Use24 = s.Use24HourTime }; heat.Set(sum.Heat, sum.Observed);
             var busy = sum.BusiestHours();
             var busyText = Ui.Text(busy.Count == 0 ? "Your busiest hours appear after a few days of readings." : "Busiest: " + string.Join(", ", busy.Select(b => $"{(DayOfWeek)b.Weekday} {BudgetSetting.Clock(b.Hour * 60, s.Use24HourTime)}")), 12.5, FontWeights.Normal, "Ui.Muted");
             busyText.Margin = new Thickness(0, 0, 0, 10);
-            Add(Ui.Card(Ui.Stack(Title("", "Busy hours", "last 30 days"), busyText, heat), accent));
+            Add(Ui.Card(Ui.Stack(Title("\uE916", "Busy hours", "last 30 days"), busyText, heat), accent));
 
             var insights = new StackPanel();
             ProviderDetailView.Insights(insights, sum, window, s);
-            Add(Ui.Card(Ui.Stack(Title("", "Insights", window.Label), insights), accent));
+            Add(Ui.Card(Ui.Stack(Title("\uE9D9", "Insights", window.Label), insights), accent));
         }
         foreach (var report in data.tokens)
-            Add(Ui.Card(Ui.Stack(Title("", report.Label + " tokens", "this PC"), TokenViews.Summary(report, _coordinator.Items.FirstOrDefault(p => p.Id == report.Source)?.AccentColor ?? accent, Reduced)), _coordinator.Items.FirstOrDefault(p => p.Id == report.Source)?.AccentColor));
+            Add(Ui.Card(Ui.Stack(Title("\uE8EF", report.Label + " tokens", "this PC"), TokenViews.Summary(report, _coordinator.Items.FirstOrDefault(p => p.Id == report.Source)?.AccentColor ?? accent, Reduced)), _coordinator.Items.FirstOrDefault(p => p.Id == report.Source)?.AccentColor));
         if (data.tokens.Count == 0 && s.TrackLocalTokens && _coordinator.Tokens.Status is { Length: > 0 } status)
-            Add(Ui.Card(Ui.Stack(Title("", "Tokens", null), Ui.Text(status, 12.5, FontWeights.Normal, "Ui.Muted"))));
+            Add(Ui.Card(Ui.Stack(Title("\uE8EF", "Tokens", null), Ui.Text(status, 12.5, FontWeights.Normal, "Ui.Muted"))));
     }
 
     private GlassTabBar MakeRange()
@@ -161,8 +166,8 @@ public sealed class HistoryView : Grid
         var average = recorded.Count > 0 ? recorded.Average(d => d.Used!.Value) : (double?)null;
         var rank = day.Used is { } u ? recorded.Count(d => d.Used > u) + 1 : (int?)null;
         var facts = new UniformGrid2(3);
-        facts.Add(Fact("Used", Ui.Percent(day.Used), window.Label));
-        facts.Add(Fact("vs your average", average is { } a && day.Used is { } du && a > .0001 ? $"{du / a:0.0}×" : "—", average is { } av ? $"average {Ui.Percent(av)}" : "no average yet"));
+        facts.Add(Fact("Used", Ui.Limits(day.Used), $"of the {window.Label.ToLowerInvariant()} limit · {Math.Round(day.Coverage * 100):0}% of the day observed"));
+        facts.Add(Fact("Compared with usual", average is { } a && day.Used is { } du && a > .0001 ? (du >= a ? $"{du / a:0.0}× more" : $"{Math.Round((1 - du / a) * 100):0}% less") : "—", average is { } av ? $"than your {Ui.Limits(av)} average" : "no average yet"));
         facts.Add(Fact("Rank", rank is { } r ? $"#{r}" : "—", $"of {recorded.Count} recorded days"));
         var stack = Ui.Stack(Ui.Text(day.Date.ToString("dddd, MMMM d"), 18, FontWeights.SemiBold), facts.Panel);
         foreach (var (w, summary) in others)

@@ -70,6 +70,44 @@ internal static class PlanningChecks
         alerts.Evaluate([vm], context);
         Check(first >= 2 && raised.Any(a => a.Title.Contains("over your budget")) && raised.Any(a => a.Title.Contains("renews in")) && raised.Count == first, "budget and pre-reset alerts fire once per period");
 
+        // Account types: an Edu seat's monthly credits, the plan, why a limit stopped and free resets (Codex app-server schema).
+        using (var edu = System.Text.Json.JsonDocument.Parse("""
+            {"id":2,"result":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":12,"windowDurationMins":300,"resetsAt":1793443246},"secondary":{"usedPercent":30,"windowDurationMins":10080,"resetsAt":1794030046},
+              "credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"individualLimit":{"limit":"150","used":"30","remainingPercent":80,"resetsAt":1795000000},"planType":"edu","rateLimitReachedType":"workspace_member_credits_depleted"},
+             "rateLimitsByLimitId":{"codex":{"limitId":"codex","primary":{"usedPercent":12,"windowDurationMins":300,"resetsAt":1793443246},"secondary":{"usedPercent":30,"windowDurationMins":10080,"resetsAt":1794030046},
+              "individualLimit":{"limit":"150","used":"30","remainingPercent":80,"resetsAt":1795000000},"planType":"edu"}},
+             "rateLimitResetCredits":{"availableCount":1,"credits":[{"status":"available","title":"Full reset (Weekly + 5 hr)","expiresAt":1794001071}]}}}
+            """))
+        {
+            var windows = UsageNotch.Providers.CodexSubscriptionProvider.ParseRateLimits(edu.RootElement);
+            var monthly = windows.Single(x => x.Id == "codex-monthly");
+            Check(Math.Abs(monthly.UsedFraction!.Value - .2) < 1e-9 && monthly.UsedAmount == 30 && monthly.LimitAmount == 150 && monthly.Unit == "credits", "an Edu seat's monthly limit reads as 30 of 150 credits (20%)");
+            Check(windows.Any(x => x.Id == "codex-reset-credits" && x.UsedFraction is null), "an available free limit reset is shown, without a percentage");
+            var (plan, status) = UsageNotch.Providers.CodexSubscriptionProvider.PlanAndStatus(edu.RootElement);
+            Check(plan == "Edu" && status!.Contains("workspace owner"), "the ChatGPT plan and the reason a limit stopped are explained");
+        }
+        var todayKey = now.ToLocalTime().Date.ToString("yyyy-MM-dd");
+        using (var usage = System.Text.Json.JsonDocument.Parse("{\"result\":{\"summary\":{\"lifetimeTokens\":1888779660,\"peakDailyTokens\":218035337,\"currentStreakDays\":0,\"longestStreakDays\":7},\"dailyUsageBuckets\":[{\"startDate\":\"" + todayKey + "\",\"tokens\":1000},{\"startDate\":\"2026-01-01\",\"tokens\":5}]}}"))
+        {
+            var account = UsageNotch.Providers.CodexSubscriptionProvider.ParseTokenUsage(usage.RootElement)!;
+            var merged = TokenReport.WithAccount(null, "codex", "Codex", account, now);
+            Check(account.Lifetime == 1888779660 && merged.AllDevices && merged.Today.Total == 1000 && merged.Days.Count == 30 && merged.Today.Cost is null, "Codex token totals come from OpenAI across devices, without an invented cost");
+        }
+        Check(UsageNotch.Providers.ClaudeSubscriptionProvider.PlanName("max", "default_claude_max_5x") == "Max 5×" && UsageNotch.Providers.ClaudeSubscriptionProvider.PlanName("pro", null) == "Pro", "Claude plans read as Max 5× and Pro");
+        using (var credit = System.Text.Json.JsonDocument.Parse("""{"utilization":99.99,"limit_dollars":250,"used_dollars":249.99}"""))
+            Check(UsageNotch.Providers.ClaudeSubscriptionProvider.LabelFor("iguana_necktie", credit.RootElement) == "Usage credit · $250", "unknown Claude limits with a dollar cap read as usage credits");
+        Check(UsageNotch.Providers.CursorSubscriptionProvider.PlanName("pro") == "Pro" && UsageNotch.Providers.CursorSubscriptionProvider.PlanName("free_trial") == "Free trial", "Cursor memberships read as plans");
+
+        // Accuracy: usage while the PC slept and usage right after a renewal are counted, never guessed beyond that.
+        var day = now.ToLocalTime().Date.AddHours(9); var period = new DateTimeOffset(day, now.ToLocalTime().Offset);
+        var slept = new List<UsagePoint> { new(period, .10, period.AddHours(5), "a"), new(period.AddMinutes(10), .20, period.AddHours(5), "a"),
+            new(period.AddHours(2), .60, period.AddHours(5), "a"),                           // the PC slept for 2 h: +40 points, timing unknown
+            new(period.AddHours(6), .15, period.AddHours(10), "b") };                        // renewed during the gap: 15 points since then
+        var sleptSummary = HistoryInsights.Summarize(slept, [], period.AddHours(6).AddMinutes(1));
+        Check(Math.Abs(sleptSummary.Days[^1].Used!.Value - (.10 + .40 + .15)) < 1e-9, "daily totals include usage across sleep gaps and after renewals (0.65, not 0.10)");
+        Check(sleptSummary.Days[^1].Coverage is > 0 and < .1, "coverage shows how little of the day was observed");
+        Check(sleptSummary.Heat.Sum() is var heatSum && Math.Abs(heatSum - .10) < 1e-9, "only usage with a known time shapes the busy-hours map");
+
         // Local tokens: Claude lines repeat usage per content block; Codex totals are cumulative.
         var dir = Path.Combine(Path.GetTempPath(), "UsageNotch-Tokens-" + Guid.NewGuid().ToString("N"));
         var claudeDir = Path.Combine(dir, ".claude", "projects", "proj"); Directory.CreateDirectory(claudeDir);

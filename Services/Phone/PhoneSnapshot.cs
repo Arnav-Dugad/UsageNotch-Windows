@@ -21,7 +21,7 @@ public static class PhoneSnapshot
     /// <summary>A reported limit without a percentage, such as credits with no monthly cap. Older apps ignore it.</summary>
     public sealed record Extra(string Id, string Label, string? Detail, long? Reset, double? UsedAmount, double? LimitAmount, string? Unit);
     /// <summary>Usage consumed on one local date, as a fraction of the limit. Null when this PC recorded nothing that day.</summary>
-    public sealed record Day(string Date, double? Used);
+    public sealed record Day(string Date, double? Used, double? Coverage = null);
     /// <summary>
     /// One window's history: 30 days of daily consumption, a weekday x hour heatmap of the last 30 days (index
     /// weekday*24+hour, Sunday first), how many distinct hours were observed in each cell, the current streak of days
@@ -39,12 +39,15 @@ public static class PhoneSnapshot
     public sealed record Provider(string Id, string Name, string Status, List<Window> Windows,
         string? StatusText = null, string? Account = null, long? UpdatedAt = null, string? ManageUrl = null,
         string? Session = null, string? Weekly = null, List<Extra>? Extras = null, List<History>? History = null,
-        string? Kind = null, string? AccountLabel = null);
+        string? Kind = null, string? AccountLabel = null, string? Plan = null, List<Share>? Breakdown = null);
+    /// <summary>A part of the week's usage as the provider reports it ("Claude Code", 100).</summary>
+    public sealed record Share(string Name, double Percent);
     public sealed record IncidentInfo(string Provider, string Title, string Impact, string Status, string? Url, long UpdatedAt);
     public sealed record Totals(long Input, long Output, long CacheRead, long CacheWrite, long Total, double? Cost);
     public sealed record TokenDay(string Date, long Total, double? Cost);
     public sealed record ShareInfo(string Name, long Total, double? Cost, double Share);
-    public sealed record TokenSource(string Id, string Label, Totals Today, Totals Week, List<TokenDay> Days, List<ShareInfo> Projects, List<ShareInfo> Models);
+    public sealed record TokenSource(string Id, string Label, Totals Today, Totals Week, List<TokenDay> Days, List<ShareInfo> Projects, List<ShareInfo> Models,
+        bool? AllDevices = null, long? Lifetime = null, long? PeakDaily = null, int? LongestStreak = null);
     public sealed record TokenInfo(long UpdatedAt, List<TokenSource> Sources);
     /// <summary>What a snapshot carries beyond the dock: protocol 2's heavier fields, local tokens and status-page incidents.</summary>
     public sealed record Extras(bool Detailed, IReadOnlyList<TokenReport> Tokens, IReadOnlyList<Services.Incident> Incidents, bool ShareProjects, int TrendPoints = 400)
@@ -104,7 +107,8 @@ public static class PhoneSnapshot
                 settings.ShowAccountNames && !string.IsNullOrWhiteSpace(snapshot.AccountName) ? snapshot.AccountName : null,
                 snapshot.FetchedAt?.ToUnixTimeMilliseconds(), ManageUrl(snapshot.ManageUrl),
                 session?.Id, weekly?.Id, unlimited.Count == 0 ? null : unlimited, summary is { Count: > 0 } ? summary : null,
-                ProviderKind.Of(snapshot.Id), settings.Accounts.FirstOrDefault(a => a.ProviderId == snapshot.Id) is { } extra ? (string.IsNullOrWhiteSpace(extra.Label) ? extra.Slug : extra.Label.Trim()) : null));
+                ProviderKind.Of(snapshot.Id), settings.Accounts.FirstOrDefault(a => a.ProviderId == snapshot.Id) is { } extra ? (string.IsNullOrWhiteSpace(extra.Label) ? extra.Slug : extra.Label.Trim()) : null,
+                snapshot.Plan, snapshot.Breakdown is { Count: > 0 } shares ? shares.Take(8).Select(x => new Share(x.Name, Math.Round(x.Percent, 2))).ToList() : null));
         }
         return new Snapshot(1, now.ToUnixTimeMilliseconds(), providers, "windows-app", AppVersion(), Protocol: 2, Features: Features,
             Shared: SharedSettings.ToJson(settings),
@@ -118,7 +122,7 @@ public static class PhoneSnapshot
         static List<ShareInfo> S(IEnumerable<TokenShare> list) => list.Select(x => new ShareInfo(x.Name, x.Total, x.Cost is { } c ? Math.Round(c, 4) : null, Math.Round(x.Share, 4))).ToList();
         return new TokenSource(r.Source, r.Label, T(r.Today), T(r.Week),
             r.Days.Select(d => new TokenDay(d.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), d.Total, d.Cost is { } c ? Math.Round(c, 4) : null)).ToList(),
-            projects ? S(r.Projects) : [], S(r.Models));
+            projects ? S(r.Projects) : [], S(r.Models), r.AllDevices ? true : null, r.Lifetime, r.PeakDaily, r.LongestStreak);
     }
 
     /// <summary>The dock's own forecast, with the time the limit would be reached when that comes before the reset.</summary>
@@ -169,7 +173,7 @@ public static class PhoneSnapshot
         return value;
     }
 
-    private static List<Day> Days(IEnumerable<DayUsage> days) => days.Select(d => new Day(d.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), d.Used is { } u ? Math.Round(u, 4) : null)).ToList();
+    private static List<Day> Days(IEnumerable<DayUsage> days) => days.Select(d => new Day(d.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), d.Used is { } u ? Math.Round(u, 4) : null, d.Used is null ? null : d.Coverage)).ToList();
 
     /// <summary>Daily consumption (30 and 90 days), a 30-day weekday x hour heatmap and the streak from raw readings, in this PC's local time.</summary>
     public static History Aggregate(string window, string label, IReadOnlyList<UsagePoint> points, DateTimeOffset now)

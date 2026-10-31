@@ -23,6 +23,13 @@ public sealed record LimitWindow(
     public string ResetLocalText => ResetsAt is { } at ? $"Resets {at.ToLocalTime():ddd, MMM d · HH:mm:ss zzz} (local)" : "Exact reset not reported";
 }
 
+/// <summary>Where a limit's usage went, as the provider reports it (for example "Claude Code 100%").</summary>
+public sealed record UsageShare(string Name, double Percent);
+
+/// <summary>Token totals the provider itself keeps for the account, across every device (Codex's account/usage/read).</summary>
+public sealed record AccountTokens(long? Lifetime, long? PeakDaily, int? CurrentStreak, int? LongestStreak, IReadOnlyList<AccountTokenDay> Days);
+public sealed record AccountTokenDay(DateTime Date, long Tokens);
+
 public sealed record ProviderSnapshot(
     string Id,
     string DisplayName,
@@ -33,7 +40,10 @@ public sealed record ProviderSnapshot(
     string? StatusText = null,
     string? ManageUrl = null,
     DateTimeOffset? FetchedAt = null,
-    string? AccountName = null)
+    string? AccountName = null,
+    string? Plan = null,
+    IReadOnlyList<UsageShare>? Breakdown = null,
+    AccountTokens? Tokens = null)
 {
     public LimitWindow? Headline => Windows
         .Where(window => window.UsedFraction.HasValue)
@@ -94,6 +104,8 @@ public sealed class ProviderViewModel : INotifyPropertyChanged
     public SnapshotStatus Status => Snapshot.Status;
     public string? StatusText => Snapshot.StatusText;
     public string AccountLabel => !_settings.ShowAccountNames ? "" : Snapshot.AccountName ?? "Account name unavailable";
+    /// <summary>The subscription, such as "Max 5×", "Edu" or "Pro"; empty when the provider doesn't say.</summary>
+    public string Plan => Snapshot.Plan ?? "";
     public bool ShowRemaining => _settings.ShowRemaining;
     public double? RingFraction => UsedFraction is { } value ? ShowRemaining ? 1 - Math.Clamp(value, 0, 1) : value : null;
     public double SecondaryRingFraction => SecondaryKnown && ShowRemaining ? 1 - Math.Clamp(SecondaryFraction, 0, 1) : SecondaryFraction;

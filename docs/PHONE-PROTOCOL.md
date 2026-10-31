@@ -69,6 +69,12 @@ All requests are rate-limited together (30 a minute). Query strings are rejected
 }
 ```
 
+- Windows 2.7 adds, all optional:
+  - `providers[].plan`: the subscription as the provider reports it ("Max 5×", "Plus", "Edu", "Edu Pro", "Business", "Pro"…).
+  - `providers[].breakdown`: `[{ "name": "Claude Code", "percent": 100 }]`, where this week's usage went (Claude only, for now).
+  - `history[].days[].coverage` and `calendar[].coverage`: 0..1 of that local day this PC observed. Daily `used` now includes usage that happened while the PC was off or asleep (counted on the day it was next read) and usage since a renewal, so totals are complete; coverage says how much of the day's timing is known.
+  - `tokens.sources[].allDevices: true` marks totals that come from the provider for the whole account (Codex), not just this PC's transcripts, with optional `lifetime`, `peakDaily` and `longestStreak`. Costs are null there.
+  - Codex Edu, Business and Enterprise seats report a `<limitId>-monthly` window ("Monthly limit") with `usedAmount`/`limitAmount` in `credits`. A `<limitId>-credits` extra holds a bought credit balance, and `codex-reset-credits` an available free limit reset.
 - `windows[].forecast` gains `lowRate` and `highRate`: the 10th and 90th percentile observed paces in percentage points per hour, which phones draw as the pace band.
 - `unused[].peak` is the highest reading in a finished limit period, so unused capacity is `1 - peak`.
 - `reliability.fixed` counts periods whose reported reset time never moved by more than 2 minutes. `moved` counts the others. `confirmed` and `changed` count "Confirmed reset" and "Window changed" events in the last 30 days.

@@ -180,14 +180,14 @@ internal static class PhoneLinkChecks
         var series = new List<UsagePoint>
         {
             new(noon.AddDays(-2), .10, null, "a"), new(noon.AddDays(-2).AddMinutes(10), .30, null, "a"),     // +0.20 two days ago
-            new(noon.AddDays(-1), .40, null, "b"), new(noon.AddDays(-1).AddMinutes(10), .50, null, "b"),     // +0.10 yesterday
-            new(noon.AddDays(-1).AddHours(3), .90, null, "b"),                                                // 3-hour gap: not counted
-            new(noon, .05, null, "c"), new(noon.AddMinutes(5), .15, null, "c"), new(noon.AddMinutes(10), .12, null, "c"), // +0.10 today; a drop adds nothing
+            new(noon.AddDays(-1), .40, null, "b"), new(noon.AddDays(-1).AddMinutes(10), .50, null, "b"),     // +0.10 after the overnight gap, +0.10 yesterday
+            new(noon.AddDays(-1).AddHours(3), .90, null, "b"),                                                // 3-hour gap: +0.40 still counted, timing unknown
+            new(noon, .05, null, "c"), new(noon.AddMinutes(5), .15, null, "c"), new(noon.AddMinutes(10), .12, null, "c"), // renewed: +0.05, then +0.10; a small drop adds nothing
         };
         var summary = PhoneSnapshot.Aggregate("five_hour", "Current session", series, noon.AddMinutes(20));
         double? DayUsed(int ago) => summary.Days[^(ago + 1)].Used;
-        Check(summary.Days.Count == 30 && Math.Abs(DayUsed(2)!.Value - .2) < 1e-6 && Math.Abs(DayUsed(1)!.Value - .1) < 1e-6 && Math.Abs(DayUsed(0)!.Value - .1) < 1e-6 && DayUsed(3) == null,
-            "daily consumption adds increases only, skips gaps and drops, and leaves unobserved days empty");
+        Check(summary.Days.Count == 30 && Math.Abs(DayUsed(2)!.Value - .2) < 1e-6 && Math.Abs(DayUsed(1)!.Value - .6) < 1e-6 && Math.Abs(DayUsed(0)!.Value - .15) < 1e-6 && DayUsed(3) == null,
+            "daily consumption counts rises across gaps, ignores small drops, and leaves unobserved days empty");
         var cell = (int)noon.ToLocalTime().DayOfWeek * 24 + noon.ToLocalTime().Hour;
         Check(summary.Heat.Count == 168 && Math.Abs(summary.Heat[cell] - .1) < 1e-6 && summary.Observed[cell] == 1 && summary.Streak == 3, "heatmap cells, observed hours and the 3-day streak are correct");
         // The 90-day calendar reaches further back; the 30-day days and heatmap don't.
@@ -195,8 +195,8 @@ internal static class PhoneLinkChecks
         var longer = PhoneSnapshot.Aggregate("five_hour", "Current session", older, noon.AddMinutes(20));
         var oldCell = (int)noon.AddDays(-60).ToLocalTime().DayOfWeek * 24 + noon.ToLocalTime().Hour;
         Check(longer.Calendar is { Count: 90 } calendar && Math.Abs(calendar[^61].Used!.Value - .4) < 1e-6 && calendar[^1].Date == summary.Days[^1].Date && calendar[^62].Used == null
-            && longer.Days.SequenceEqual(summary.Days) && longer.Heat.SequenceEqual(summary.Heat) && longer.Observed.SequenceEqual(summary.Observed) && (oldCell != cell || longer.Heat[cell] == summary.Heat[cell]),
-            "the 90-day calendar includes older days while the 30-day days and heatmap stay unchanged");
+            && Math.Abs(longer.Days[^3].Used!.Value - .3) < 1e-6 && longer.Heat.SequenceEqual(summary.Heat) && longer.Observed.SequenceEqual(summary.Observed) && (oldCell != cell || longer.Heat[cell] == summary.Heat[cell]),
+            "the 90-day calendar includes older days; a renewal after a long gap counts its new usage; the heatmap is unchanged");
 
         // Forecast from the dock's own estimator, with the limit time when it comes before the reset.
         var climbing = Enumerable.Range(0, 7).Select(i => new UsagePoint(now.AddMinutes(-30 + i * 5), .50 + i * .05, now.AddHours(5), "p")).ToList();

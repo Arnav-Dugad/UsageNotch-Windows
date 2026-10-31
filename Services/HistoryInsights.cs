@@ -1,6 +1,7 @@
 namespace UsageNotch.Services;
 
-public sealed record DayUsage(DateTime Date, double? Used);
+/// <summary>One local date: usage as a fraction of the limit (null without readings) and how much of the day was observed (0..1).</summary>
+public sealed record DayUsage(DateTime Date, double? Used, double Coverage = 0);
 public sealed record UnusedPeriod(DateTimeOffset End, double Peak);
 public sealed record LimitHit(DateTimeOffset At, DateTimeOffset? Reset);
 public sealed record ResetReliability(int Periods, int Fixed, int Moved, double AverageShiftMinutes, int Confirmed, int Changed);
@@ -12,6 +13,8 @@ public sealed record WindowSummary(
 {
     public double? Total(int days) => Days.TakeLast(days).Where(d => d.Used is not null).Select(d => d.Used!.Value).DefaultIfEmpty().Sum() is var sum && Days.TakeLast(days).Any(d => d.Used is not null) ? sum : null;
     public int Recorded(int days) => Days.TakeLast(days).Count(d => d.Used is not null);
+    /// <summary>How much of the last <paramref name="days"/> days this PC observed, 0..1.</summary>
+    public double Coverage(int days) => Days.TakeLast(days).Select(d => d.Coverage).DefaultIfEmpty(0).Average();
     public DayUsage? Busiest(int days) => Days.TakeLast(days).Where(d => d.Used is > 0).MaxBy(d => d.Used);
     /// <summary>The busiest observed weekday × hour cells, most first: (weekday 0 = Sunday, hour, consumption).</summary>
     public IReadOnlyList<(int Weekday, int Hour, double Used)> BusiestHours(int count = 3) => Enumerable.Range(0, 168)
@@ -30,7 +33,7 @@ public static class HistoryInsights
     public static WindowSummary Summarize(IReadOnlyList<UsagePoint> points, IReadOnlyList<UsageEvent> events, DateTimeOffset now)
     {
         var today = now.ToLocalTime().Date; var heatFrom = today.AddDays(-HistoryDays + 1);
-        var consumed = new Dictionary<DateTime, double>(); var observed = new HashSet<DateTime>();
+        var consumed = new Dictionary<DateTime, double>(); var observed = new HashSet<DateTime>(); var covered = new Dictionary<DateTime, double>();
         var heat = new double[168]; var hours = new int[168]; var seenHours = new HashSet<(DateTime, int)>();
         for (var i = 0; i < points.Count; i++)
         {
@@ -38,13 +41,27 @@ public static class HistoryInsights
             var recent = local.Date >= heatFrom;
             observed.Add(local.Date);
             if (recent && seenHours.Add((local.Date, local.Hour))) hours[cell]++;
-            if (i == 0 || !UsageAnalytics.Continuous(points[i - 1], points[i])) continue;
-            var delta = Math.Max(0, points[i].Used - points[i - 1].Used);
+            if (i == 0) continue;
+            var (delta, timed) = UsageAnalytics.Consumed(points[i - 1], points[i]);
+            // Usage after a gap or a renewal counts on the day it was read; only timed usage shapes the hour map.
             consumed[local.Date] = consumed.GetValueOrDefault(local.Date) + delta;
-            if (recent) heat[cell] += delta;
+            if (recent && timed) heat[cell] += delta;
+            if (points[i].At - points[i - 1].At <= TimeSpan.FromMinutes(20))
+            {
+                // Observed time, split across local dates.
+                var from = points[i - 1].At.ToLocalTime();
+                while (from < local)
+                {
+                    var next = from.Date.AddDays(1) < local.DateTime ? new DateTimeOffset(from.Date.AddDays(1), from.Offset) : local;
+                    covered[from.Date] = covered.GetValueOrDefault(from.Date) + (next - from).TotalHours;
+                    from = next;
+                }
+            }
         }
+        var nowLocal = now.ToLocalTime();
+        double Coverage(DateTime d) => Math.Clamp(covered.GetValueOrDefault(d) / (d == today ? Math.Max(1 / 60d, (nowLocal - new DateTimeOffset(today, nowLocal.Offset)).TotalHours) : 24), 0, 1);
         List<DayUsage> Range(int count) => Enumerable.Range(0, count).Select(i => today.AddDays(i - count + 1))
-            .Select(d => new DayUsage(d, observed.Contains(d) ? Math.Round(consumed.GetValueOrDefault(d), 4) : null)).ToList();
+            .Select(d => new DayUsage(d, observed.Contains(d) ? Math.Round(consumed.GetValueOrDefault(d), 4) : null, Math.Round(Coverage(d), 3))).ToList();
         bool Used(DateTime d) => observed.Contains(d) && consumed.GetValueOrDefault(d) > .0001;
         var streak = 0; var cursor = Used(today) ? today : today.AddDays(-1);
         while (Used(cursor)) { streak++; cursor = cursor.AddDays(-1); }

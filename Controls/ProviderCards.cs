@@ -63,6 +63,7 @@ public static class ProviderVisuals
 
     public static LimitRow Limit(ProviderViewModel p, LimitWindow w, int index, bool reduced)
     {
+        if (w.UsedFraction is null && w.LimitAmount is null && p.Status == SnapshotStatus.Ok) return InfoRow(w, p.Settings);
         var s = p.Settings; var used = w.UsedFraction;
         var shown = used is { } u ? (p.ShowRemaining ? 1 - Math.Clamp(u, 0, 1) : u) : (double?)null;
         var color = used is { } uu ? Palette.Readable(Palette.Usage(uu), Theme.Current.Card) : Theme.Current.Muted;
@@ -83,6 +84,19 @@ public static class ProviderVisuals
         if (!string.IsNullOrWhiteSpace(amount)) { var a = Ui.Text(amount, 11, FontWeights.Normal, "Ui.Faint"); a.Margin = new Thickness(0, 4, 0, 0); stack.Children.Add(a); }
         stack.Children.Add(pace); stack.Children.Add(budgetSlot);
         return new LimitRow { Window = w, View = Ui.Inner(stack, new Thickness(14, 12, 14, 12)), Countdown = countdown, Pace = pace, BudgetSlot = budgetSlot };
+    }
+
+    /// <summary>A fact without a percentage, such as a credit balance or a free limit reset: a title, a value and a note.</summary>
+    private static LimitRow InfoRow(LimitWindow w, AppSettings s)
+    {
+        var parts = (w.Detail ?? "").Split(" · ", 2);
+        var value = Ui.Text(parts[0], 12.5, FontWeights.SemiBold, "Ui.Text", false);
+        var head = Ui.Columns((Ui.Text(w.Label, 13, FontWeights.Normal, "Ui.Text", false), new GridLength(1, GridUnitType.Star)), (value, GridLength.Auto));
+        var note = Ui.Text(parts.Length > 1 ? parts[1] : w.ResetsAt is { } at ? "Until " + TimeDisplay.Stamp(at, s) : "", 11.5, FontWeights.Normal, "Ui.Faint");
+        note.Margin = new Thickness(0, 4, 0, 0);
+        var countdown = new TextBlock { Visibility = Visibility.Collapsed };
+        var stack = Ui.Stack(head); if (note.Text.Length > 0) stack.Children.Add(note);
+        return new LimitRow { Window = w with { ResetsAt = null }, View = Ui.Inner(stack, new Thickness(14, 12, 14, 12)), Countdown = countdown, Pace = new TextBlock { Visibility = Visibility.Collapsed }, BudgetSlot = new Border { Visibility = Visibility.Collapsed } };
     }
 
     /// <summary>Fills a row's pace and budget lines once its forecast is known.</summary>
@@ -115,8 +129,8 @@ public static class ProviderVisuals
         var color = i.Impact switch { "critical" or "major" => Palette.Danger, "maintenance" => Palette.Loading, _ => Palette.Warning };
         var title = Ui.Text(i.Title, 13, FontWeights.SemiBold);
         var meta = Ui.Text($"{StatusName(i.Provider)} status · {char.ToUpperInvariant(i.Status[0])}{i.Status[1..]} · updated {TimeDisplay.Clock(i.UpdatedAt, s.Use24HourTime)}", 11.5, FontWeights.Normal, "Ui.Muted");
-        var body = Ui.Columns((Ui.Icon("", 18, "Ui.Warning", new Thickness(0, 0, 12, 0)), GridLength.Auto), (Ui.Stack(title, meta), new GridLength(1, GridUnitType.Star)));
-        if (i.Url is { } url) { var open = Ui.Button("Status page", () => OpenUrl(url), false, ""); open.VerticalAlignment = VerticalAlignment.Center; open.Margin = new Thickness(12, 0, 0, 0); body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); Grid.SetColumn(open, 2); body.Children.Add(open); }
+        var body = Ui.Columns((Ui.Icon("\uE7BA", 18, "Ui.Warning", new Thickness(0, 0, 12, 0)), GridLength.Auto), (Ui.Stack(title, meta), new GridLength(1, GridUnitType.Star)));
+        if (i.Url is { } url) { var open = Ui.Button("Status page", () => OpenUrl(url), false, "\uE8A7"); open.VerticalAlignment = VerticalAlignment.Center; open.Margin = new Thickness(12, 0, 0, 0); body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); Grid.SetColumn(open, 2); body.Children.Add(open); }
         ((TextBlock)((Grid)body).Children[0]).Foreground = Palette.Frozen(color);
         return Ui.Card(body, color, 20, new Thickness(16, 12, 16, 12));
     }
@@ -146,7 +160,8 @@ public sealed class ProviderCardView : Border
     {
         Provider = p;
         var s = p.Settings;
-        var name = Ui.Text(p.DisplayName, 16, FontWeights.SemiBold, "Ui.Text", false);
+        var name = Ui.Row(8, Ui.Text(p.DisplayName, 16, FontWeights.SemiBold, "Ui.Text", false));
+        if (p.Plan.Length > 0) name.Children.Add(Ui.PlanBadge(p.Plan).WithMargin(new Thickness(8, 0, 0, 0)));
         _updated = Ui.Text(ProviderVisuals.Updated(p), 11.5, FontWeights.Normal, "Ui.Faint", false);
         var pill = Ui.Pill(s.ReviewSession ? "Preview" : p.StatusPill, ProviderVisuals.StatusColor(p));
         var logo = Ui.LogoTile(p.Id, 36);
@@ -165,13 +180,13 @@ public sealed class ProviderCardView : Border
             _rows.Add(row); body.Children.Add(row.View);
         }
         var hint = Ui.Text("", 12, FontWeights.Normal, "Ui.Muted"); hint.Visibility = Visibility.Collapsed;
-        var hintRow = Ui.Columns((Ui.Icon("", 14, "Ui.Accent", new Thickness(0, 0, 9, 0)), GridLength.Auto), (hint, new GridLength(1, GridUnitType.Star)));
+        var hintRow = Ui.Columns((Ui.Icon("\uE823", 14, "Ui.Accent", new Thickness(0, 0, 9, 0)), GridLength.Auto), (hint, new GridLength(1, GridUnitType.Star)));
         hintRow.Margin = new Thickness(2, 12, 0, 0); hintRow.Visibility = Visibility.Collapsed;
         body.Children.Add(hintRow);
         var actions = new WrapPanel { Margin = new Thickness(0, 14, 0, 0) };
-        var details = Ui.Button("Details", () => open(p, logo), false, "", reduced); details.Margin = new Thickness(0, 0, 8, 0);
+        var details = Ui.Button("Details", () => open(p, logo), false, "\uE9D2", reduced); details.Margin = new Thickness(0, 0, 8, 0);
         actions.Children.Add(details);
-        if (p.HasManageUrl) actions.Children.Add(Ui.Button(p.DashboardLabel, () => ProviderVisuals.OpenUrl(p.Snapshot.ManageUrl!), false, "", reduced));
+        if (p.HasManageUrl) actions.Children.Add(Ui.Button(p.DashboardLabel, () => ProviderVisuals.OpenUrl(p.Snapshot.ManageUrl!), false, "\uE8A7", reduced));
         body.Children.Add(actions);
         var card = Ui.Card(body, p.AccentColor);
         Child = card; Margin = new Thickness(0, 0, 14, 14);

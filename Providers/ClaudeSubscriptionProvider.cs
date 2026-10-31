@@ -55,12 +55,14 @@ public sealed class ClaudeSubscriptionProvider : IUsageProvider
 
         string? token;
         long? expiresAt = null;
+        string? plan = null;
         try
         {
             using var creds = JsonDocument.Parse(await File.ReadAllTextAsync(path, ct));
             var oauth = creds.RootElement.GetProperty("claudeAiOauth");
             token = oauth.GetProperty("accessToken").GetString();
             if (oauth.TryGetProperty("expiresAt", out var expires) && expires.TryGetInt64(out var timestamp)) expiresAt = timestamp;
+            plan = PlanName(oauth.TryGetProperty("subscriptionType", out var sub) ? sub.GetString() : null, oauth.TryGetProperty("rateLimitTier", out var tier) ? tier.GetString() : null);
         }
         catch (OperationCanceledException) { throw; }
         catch { return Error("Claude Code is updating its sign-in file. The next check will read it again."); }
@@ -102,6 +104,13 @@ public sealed class ClaudeSubscriptionProvider : IUsageProvider
             AddWindow(doc.RootElement, "seven_day", "All models", windows);
             AddWindow(doc.RootElement, "seven_day_opus", "Opus weekly", windows);
             AddWindow(doc.RootElement, "seven_day_sonnet", "Sonnet weekly", windows);
+            // Every other limit the account reports (new model buckets, promotional credit grants…), so none is missed.
+            foreach (var property in doc.RootElement.EnumerateObject())
+            {
+                if (KnownWindows.Contains(property.Name) || property.Value.ValueKind != JsonValueKind.Object || !property.Value.TryGetProperty("utilization", out _)) continue;
+                AddWindow(doc.RootElement, property.Name, LabelFor(property.Name, property.Value), windows);
+            }
+            var breakdown = Breakdown(doc.RootElement);
 
             if (doc.RootElement.TryGetProperty("extra_usage", out var extra) && extra.ValueKind == JsonValueKind.Object)
             {
@@ -121,7 +130,7 @@ public sealed class ClaudeSubscriptionProvider : IUsageProvider
             _rateLimitCount = 0;
             _nextAttempt = default;
             _lastGood = new ProviderSnapshot(Id, DisplayName, "✳", Fidelity.Official, SnapshotStatus.Ok, windows,
-                ManageUrl: "https://claude.ai/settings/usage", FetchedAt: DateTimeOffset.Now, AccountName: _accountName);
+                ManageUrl: "https://claude.ai/settings/usage", FetchedAt: DateTimeOffset.Now, AccountName: _accountName, Plan: plan, Breakdown: breakdown);
             _rejectedToken = null;
             SaveCache();
             return _lastGood;
@@ -131,13 +140,58 @@ public sealed class ClaudeSubscriptionProvider : IUsageProvider
         catch (Exception ex) { return Error(ex.Message); }
     }
 
+    private static readonly HashSet<string> KnownWindows = ["five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet", "extra_usage"];
+
+    /// <summary>One limit: utilization (a precise percentage), its reset, a lock reason, and dollar amounts for credit grants.</summary>
     private static void AddWindow(JsonElement root, string key, string label, List<LimitWindow> output)
     {
         if (!root.TryGetProperty(key, out var item) || item.ValueKind != JsonValueKind.Object) return;
-        double? pct = GetDouble(item, "utilization");
+        var utilization = GetDouble(item, "utilization");
         DateTimeOffset? reset = null;
         if (item.TryGetProperty("resets_at", out var r) && r.ValueKind == JsonValueKind.String && DateTimeOffset.TryParse(r.GetString(), out var parsed)) reset = parsed;
-        output.Add(new LimitWindow(key, label, pct.HasValue ? pct.Value / 100.0 : null, reset));
+        var limitDollars = GetDouble(item, "limit_dollars"); var usedDollars = GetDouble(item, "used_dollars");
+        var locked = item.TryGetProperty("locked_reason", out var l) && l.ValueKind == JsonValueKind.String ? l.GetString() : null;
+        output.Add(new LimitWindow(key, label, utilization.HasValue ? Math.Clamp(utilization.Value / 100.0, 0, 10) : null, reset,
+            locked is { Length: > 0 } ? "Locked: " + locked.Replace('_', ' ') : null,
+            limitDollars.HasValue ? usedDollars ?? 0 : null, limitDollars, limitDollars.HasValue ? "USD" : null));
+    }
+
+    /// <summary>A readable name for a limit Claude reports under an internal key.</summary>
+    public static string LabelFor(string key, JsonElement item)
+    {
+        if (GetDouble(item, "limit_dollars") is { } dollars) return $"Usage credit · ${dollars:0.##}";
+        return key switch
+        {
+            "seven_day_oauth_apps" => "Other apps weekly",
+            "seven_day_cowork" => "Cowork weekly",
+            _ when key.StartsWith("seven_day_") => "Weekly · " + Humanize(key["seven_day_".Length..]),
+            _ => Humanize(key)
+        };
+    }
+
+    private static string Humanize(string key) => key.Length == 0 ? "Limit" : char.ToUpperInvariant(key[0]) + key[1..].Replace('_', ' ');
+
+    /// <summary>Where this week's usage went (Claude Code, chat, …), as Claude reports it.</summary>
+    private static IReadOnlyList<UsageShare>? Breakdown(JsonElement root)
+    {
+        if (!root.TryGetProperty("seven_day_breakdown", out var b) || b.ValueKind != JsonValueKind.Object || !b.TryGetProperty("rows", out var rows) || rows.ValueKind != JsonValueKind.Array) return null;
+        var list = rows.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Object)
+            .Select(x => new UsageShare(x.TryGetProperty("display_name", out var n) && n.ValueKind == JsonValueKind.String ? new string((n.GetString() ?? "").Where(c => !char.IsControl(c)).Take(40).ToArray()) : "Other", GetDouble(x, "percent") ?? 0))
+            .Where(x => x.Percent > 0).Take(8).ToList();
+        return list.Count == 0 ? null : list;
+    }
+
+    /// <summary>"Max 5×" from Claude Code's subscription type and rate-limit tier; null when unknown.</summary>
+    public static string? PlanName(string? subscription, string? tier)
+    {
+        var multiplier = tier is null ? null : System.Text.RegularExpressions.Regex.Match(tier, @"(\d+)x") is { Success: true } m ? m.Groups[1].Value + "×" : null;
+        return subscription?.ToLowerInvariant() switch
+        {
+            "max" => "Max" + (multiplier is null ? "" : " " + multiplier),
+            "pro" => "Pro", "team" => "Team", "enterprise" => "Enterprise", "free" => "Free",
+            { Length: > 0 } other => char.ToUpperInvariant(other[0]) + other[1..],
+            _ => null
+        };
     }
 
     private static double? GetDouble(JsonElement obj, string name)

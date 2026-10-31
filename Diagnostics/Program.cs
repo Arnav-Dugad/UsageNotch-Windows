@@ -80,6 +80,34 @@ internal static class Program
             link.DisposeAsync().AsTask().GetAwaiter().GetResult();
             return 0;
         }
+        if (args.Contains("--codex-raw"))
+        {
+            // Prints the Codex app-server's raw rate-limit and account replies, with e-mail addresses masked.
+            var exe = CodexSubscriptionProvider.FindCodex() ?? throw new Exception("Codex not found");
+            var home = args.SkipWhile(a => a != "--codex-raw").Skip(1).FirstOrDefault(a => !a.StartsWith("--"));
+            using var process = System.Diagnostics.Process.Start(CodexSubscriptionProvider.CreateStartInfo(exe, home))!;
+            async Task<string?> Ask(int id, string method, object parameters)
+            {
+                await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new { id, method, @params = parameters }));
+                await process.StandardInput.FlushAsync();
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+                while (!timeout.IsCancellationRequested)
+                {
+                    var line = await process.StandardOutput.ReadLineAsync(timeout.Token);
+                    if (line is null) return null;
+                    if (line.Contains($"\"id\":{id}")) return line;
+                }
+                return null;
+            }
+            Ask(1, "initialize", new { clientInfo = new { name = "usage-notch", title = "UsageNotch", version = "2.7.0" } }).GetAwaiter().GetResult();
+            process.StandardInput.WriteLine(JsonSerializer.Serialize(new { method = "initialized", @params = new { } })); process.StandardInput.Flush();
+            string Mask(string? text) => System.Text.RegularExpressions.Regex.Replace(text ?? "(none)", "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+", "<email>");
+            Console.WriteLine("RATE LIMITS: " + Mask(Ask(2, "account/rateLimits/read", new { }).GetAwaiter().GetResult()));
+            Console.WriteLine("ACCOUNT: " + Mask(Ask(3, "account/read", new { refreshToken = false }).GetAwaiter().GetResult()));
+            Console.WriteLine("USAGE: " + Mask(Ask(4, "account/usage/read", new { }).GetAwaiter().GetResult()));
+            try { process.Kill(true); } catch { }
+            return 0;
+        }
         if (args.Contains("--status-check"))
         {
             using var statusHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };

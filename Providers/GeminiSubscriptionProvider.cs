@@ -59,10 +59,9 @@ public sealed class GeminiSubscriptionProvider : IUsageProvider
             if (windows.Count == 0)
                 return Error("Gemini connected, but Google returned no model quota buckets.");
 
-            return new ProviderSnapshot(Id, DisplayName, Glyph, Fidelity.Official, SnapshotStatus.Ok, windows,
-                string.IsNullOrWhiteSpace(tier) ? null : tier,
+            return new ProviderSnapshot(Id, DisplayName, Glyph, Fidelity.Official, SnapshotStatus.Ok, windows, null,
                 "https://github.com/google-gemini/gemini-cli/blob/main/docs/resources/quota-and-pricing.md",
-                DateTimeOffset.Now);
+                DateTimeOffset.Now, Plan: string.IsNullOrWhiteSpace(tier) ? null : tier.Trim());
         }
         catch (GeminiServiceException ex) when (ex.Reason == "SERVICE_DISABLED")
         {

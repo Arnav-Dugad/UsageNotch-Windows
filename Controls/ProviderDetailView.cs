@@ -35,10 +35,11 @@ public sealed class ProviderDetailView : Grid
     {
         _coordinator = coordinator; _p = p; _reduced = reduced; _persist = persist;
         var s = p.Settings;
-        var back = Ui.Button("", () => Back?.Invoke(), false, "", reduced, "Back to Overview");
+        var back = Ui.Button("", () => Back?.Invoke(), false, "\uE72B", reduced, "Back to Overview");
         var title = Ui.Text(p.DisplayName, 22, FontWeights.SemiBold, "Ui.Text", false); title.Margin = new Thickness(10, 0, 10, 0); title.VerticalAlignment = VerticalAlignment.Center;
         var top = Ui.Row(12, back, Ui.Logo(p.Id, 24, s.ColoredLogos), title, Ui.Pill(s.ReviewSession ? "Preview" : p.StatusPill, ProviderVisuals.StatusColor(p)));
-        if (p.HasManageUrl) top.Children.Add(Ui.Button(p.DashboardLabel, () => ProviderVisuals.OpenUrl(p.Snapshot.ManageUrl!), false, "", reduced));
+        if (p.Plan.Length > 0) top.Children.Insert(3, Ui.PlanBadge(p.Plan));
+        if (p.HasManageUrl) top.Children.Add(Ui.Button(p.DashboardLabel, () => ProviderVisuals.OpenUrl(p.Snapshot.ManageUrl!), false, "\uE8A7", reduced));
         foreach (UIElement child in top.Children) if (child is FrameworkElement fe) fe.VerticalAlignment = VerticalAlignment.Center;
 
         _ringHost = ProviderVisuals.Ring(p, 236, reduced);
@@ -127,26 +128,26 @@ public sealed class ProviderDetailView : Grid
         foreach (var incident in _coordinator.Health.For(p.Id)?.Incidents ?? []) Add(ProviderVisuals.Incident(incident, s), true);
 
         // Pace
-        var pace = new StackPanel(); CardTitle("", "Pace", pace);
+        var pace = new StackPanel(); CardTitle("\uEC4A", "Pace", pace);
         var paceSummary = Ui.Text("Reading your recent pace…", 20, FontWeights.Light);
         var paceDetail = Ui.Text("", 12, FontWeights.Normal, "Ui.Muted"); paceDetail.Margin = new Thickness(0, 6, 0, 0);
         pace.Children.Add(paceSummary); pace.Children.Add(paceDetail);
         Add(Ui.Card(pace, p.AccentColor));
 
         // Best time to start
-        var start = new StackPanel(); CardTitle("", "Best time to start", start);
+        var start = new StackPanel(); CardTitle("\uE823", "Best time to start", start);
         var startText = Ui.Text("Needs about a week of history from this PC.", 20, FontWeights.Light);
         var startDetail = Ui.Text("A session started then renews in the middle of your usual busy hours, so you get a fresh limit when you need it most.", 12, FontWeights.Normal, "Ui.Muted"); startDetail.Margin = new Thickness(0, 6, 0, 0);
         start.Children.Add(startText); start.Children.Add(startDetail);
         Add(Ui.Card(start, p.AccentColor));
 
         // Usage explorer (the desktop's deep chart)
-        var explore = new StackPanel(); CardTitle("", "Usage explorer", explore, "Drag to zoom · Ctrl+wheel");
+        var explore = new StackPanel(); CardTitle("\uE9D2", "Usage explorer", explore, "Drag to zoom · Ctrl+wheel");
         explore.Children.Add(Explorer);
         Add(Ui.Card(explore, p.AccentColor), true);
 
         // Limits
-        var limits = new StackPanel(); CardTitle("", "Limits", limits);
+        var limits = new StackPanel(); CardTitle("\uE9F5", "Limits", limits);
         if (!string.IsNullOrWhiteSpace(p.StatusText)) { var st = Ui.Text(p.StatusText, 12, FontWeights.Normal, "Ui.Muted"); st.Margin = new Thickness(2, 0, 2, 8); limits.Children.Add(st); }
         var i = 0;
         foreach (var w in p.Windows)
@@ -157,17 +158,27 @@ public sealed class ProviderDetailView : Grid
         if (p.Windows.Count == 0) limits.Children.Add(Ui.Text("No limits reported yet.", 12.5, FontWeights.Normal, "Ui.Muted"));
         Add(Ui.Card(limits, p.AccentColor));
 
+        // Where this week's usage went, when the provider says (Claude: Claude Code, chat, …).
+        if (p.Snapshot.Breakdown is { Count: > 0 } breakdown)
+        {
+            var shares = new StackPanel(); CardTitle("\uE9F9", "Where this week went", shares, p.WeeklyWindow?.Label);
+            shares.Children.Add(ShareList.Build(breakdown.Select(b => (b.Name, b.Percent / 100, $"{b.Percent:0.#}%")), p.AccentColor, _reduced));
+            var note = Ui.Text("Shares of this week's usage, as " + p.DisplayName + " reports them.", 11.5, FontWeights.Normal, "Ui.Faint"); note.Margin = new Thickness(0, 2, 0, 0);
+            shares.Children.Add(note);
+            Add(Ui.Card(shares, p.AccentColor));
+        }
+
         // Budgets for every limit
         Add(BudgetsCard());
 
         // Insights
-        var insights = new StackPanel(); CardTitle("", "From your history", insights);
+        var insights = new StackPanel(); CardTitle("\uE9D9", "From your history", insights);
         var insightBody = Ui.Stack(Ui.Text("Reading your history…", 12.5, FontWeights.Normal, "Ui.Muted"));
         insights.Children.Add(insightBody);
         Add(Ui.Card(insights, p.AccentColor));
 
         // Tokens
-        var tokens = new StackPanel(); CardTitle("", "Tokens on this PC", tokens);
+        var tokens = new StackPanel(); CardTitle("\uE8EF", "Tokens on this PC", tokens);
         var tokenBody = Ui.Stack(Ui.Text("Reading local transcripts…", 12.5, FontWeights.Normal, "Ui.Muted"));
         tokens.Children.Add(tokenBody);
         var tokenCard = Ui.Card(tokens, p.AccentColor);
@@ -231,7 +242,7 @@ public sealed class ProviderDetailView : Grid
         var hitText = hits == 0 ? "You didn't hit this limit in the last 30 days." : $"Hit the limit {hits}× in 30 days" + (summary.Hits[^1] is { Reset: { } reset } last ? $"; last time you waited {Duration(reset - last.At)} for the reset." : ".");
         var r = summary.Reliability;
         var reliability = r.Periods == 0 ? "Reset reliability appears after a few periods." : r.Moved == 0 ? $"The reported reset time held in all {r.Periods} recent periods." : $"The reset time held in {r.Fixed} of {r.Periods} periods; it moved {r.Moved}× by about {r.AverageShiftMinutes:0} min.";
-        foreach (var (glyph, text) in new[] { ("", hitText), ("", reliability), ("", summary.Streak > 0 ? $"{summary.Streak}-day streak of using this limit." : "No current streak.") })
+        foreach (var (glyph, text) in new[] { ("\uE7BA", hitText), ("\uE916", reliability), ("\uE8D1", summary.Streak > 0 ? $"{summary.Streak}-day streak of using this limit." : "No current streak.") })
         {
             var row = Ui.Columns((Ui.Icon(glyph, 13, "Ui.Muted", new Thickness(0, 1, 10, 0)), GridLength.Auto), (Ui.Text(text, 12.5, FontWeights.Normal, "Ui.Text"), new GridLength(1, GridUnitType.Star)));
             row.Margin = new Thickness(0, 10, 0, 0); into.Children.Add(row);
@@ -242,7 +253,7 @@ public sealed class ProviderDetailView : Grid
 
     private Border BudgetsCard()
     {
-        var body = new StackPanel(); CardTitle("", "Budgets", body);
+        var body = new StackPanel(); CardTitle("\uE8C8", "Budgets", body);
         body.Children.Add(BudgetEditor(_p, _persist, _reduced));
         return Ui.Card(body, _p.AccentColor);
     }
@@ -288,7 +299,7 @@ public sealed class ProviderDetailView : Grid
 
     private Border AccentCard()
     {
-        var body = new StackPanel(); CardTitle("", "Colour", body);
+        var body = new StackPanel(); CardTitle("\uE790", "Colour", body);
         body.Children.Add(Ui.Text("Tints this provider's cards, charts and the ambient light. Rings keep the usage colours so they always mean how much is used.", 12, FontWeights.Normal, "Ui.Muted"));
         var swatches = Swatches(_p.Id, _p.Settings, _persist); swatches.Margin = new Thickness(0, 12, 0, 0);
         body.Children.Add(swatches);

@@ -25,6 +25,8 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
     public StatusPages Health { get; }
     private readonly Dictionary<string, IUsageProvider> _accountProviders = new();
     private DateTimeOffset _lastTokenScan;
+    private DateTimeOffset _lastChange;
+    private CancellationTokenSource _wake = new();
     public AppSettings Settings => _settings;
     public DateTimeOffset? LastRefresh { get; private set; }
 
@@ -39,6 +41,9 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
         _claude = new ClaudeSubscriptionProvider(_http);
         Health = new StatusPages(_http);
         Tokens.Changed += () => _tokenReports = null;
+        // Fewer gaps in history: read again as soon as the PC wakes or you unlock it.
+        Microsoft.Win32.SystemEvents.PowerModeChanged += PowerChanged;
+        Microsoft.Win32.SystemEvents.SessionSwitch += SessionSwitched;
         RebuildProviders();
     }
 
@@ -93,12 +98,22 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(_settings.PollSeconds, 30, 900)), _cts.Token);
+                // While usage is moving, read twice as often (at least every 30 s) so pace and daily totals stay precise.
+                var interval = Math.Clamp(_settings.PollSeconds, 30, 900);
+                if (DateTimeOffset.UtcNow - _lastChange < TimeSpan.FromMinutes(10)) interval = Math.Max(30, interval / 2);
+                using var wait = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token, _wake.Token);
+                try { await Task.Delay(TimeSpan.FromSeconds(interval), wait.Token); }
+                catch (OperationCanceledException) when (!_cts.IsCancellationRequested) { _wake = new(); await Task.Delay(TimeSpan.FromSeconds(4), _cts.Token); }
                 await RefreshAllAsync();
             }
             catch (OperationCanceledException) { break; }
         }
     }
+
+    private void PowerChanged(object? sender, Microsoft.Win32.PowerModeChangedEventArgs e) { if (e.Mode == Microsoft.Win32.PowerModes.Resume) Wake(); }
+    private void SessionSwitched(object? sender, Microsoft.Win32.SessionSwitchEventArgs e) { if (e.Reason is Microsoft.Win32.SessionSwitchReason.SessionUnlock or Microsoft.Win32.SessionSwitchReason.SessionLogon) Wake(); }
+    /// <summary>Cuts the current wait short; the loop reads again a few seconds later, once the network is back.</summary>
+    private void Wake() { try { _wake.Cancel(); } catch (ObjectDisposedException) { } }
 
     public async Task RefreshAllAsync()
     {
@@ -247,6 +262,9 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
     {
         if (!_providers.Any(provider => provider.Id == snapshot.Id)) return;
         var existing = Items.FirstOrDefault(item => item.Id == snapshot.Id);
+        if (existing is not null && snapshot.Status == SnapshotStatus.Ok && existing.Snapshot.Status == SnapshotStatus.Ok
+            && snapshot.Windows.Any(w => existing.Windows.FirstOrDefault(o => o.Id == w.Id)?.UsedFraction is { } before && w.UsedFraction is { } after && Math.Abs(after - before) > .0001))
+            _lastChange = DateTimeOffset.UtcNow;
         if (existing is null) Items.Add(new ProviderViewModel(snapshot, _settings));
         else existing.Snapshot = snapshot;
     }
@@ -271,7 +289,14 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
     {
         var now = DateTimeOffset.Now;
         if (!fresh && _tokenReports is { } cached && now - cached.At < TimeSpan.FromMinutes(1)) return cached.Reports;
-        var reports = Tokens.Reports(_settings, now);
+        var reports = Tokens.Reports(_settings, now).ToList();
+        // Codex accounts report their own totals across devices; prefer those to this PC's transcripts.
+        foreach (var item in Items.Where(i => i.Kind == "codex" && i.Snapshot.Tokens is { Days.Count: > 0 }))
+        {
+            var local = reports.FirstOrDefault(r => r.Source == item.Id);
+            var merged = TokenReport.WithAccount(local, item.Id, item.DisplayName, item.Snapshot.Tokens!, now);
+            if (local is null) reports.Add(merged); else reports[reports.IndexOf(local)] = merged;
+        }
         _tokenReports = (now, reports);
         return reports;
     }
@@ -283,6 +308,8 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
     {
         if (_disposed) return;
         _disposed = true;
+        Microsoft.Win32.SystemEvents.PowerModeChanged -= PowerChanged;
+        Microsoft.Win32.SystemEvents.SessionSwitch -= SessionSwitched;
         _cts.Cancel();
         _http.Dispose();
         // In-flight refreshes still own the semaphore and cancellation source.

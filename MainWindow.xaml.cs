@@ -34,6 +34,7 @@ public partial class MainWindow : Window
     private readonly UsageCoordinator _coordinator;
     private readonly AppSettings _settings;
     private readonly HotkeyService _hotkeys = new();
+    private TopmostGuard? _topmost;
     private readonly DispatcherTimer _closePopupTimer = new() { Interval = TimeSpan.FromMilliseconds(240) };
     private readonly DispatcherTimer _hoverTimer = new();
     private readonly DispatcherTimer _autoHideTimer = new();
@@ -80,7 +81,12 @@ public partial class MainWindow : Window
 
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
-        SourceInitialized += (_, _) => ApplyClickThrough();
+        SourceInitialized += (_, _) =>
+        {
+            ApplyClickThrough();
+            var handle = new WindowInteropHelper(this).Handle;
+            _topmost = new TopmostGuard(() => handle, () => !_closed && _settings.AlwaysVisible && IsVisible && !_settings.ReviewSession);
+        };
         MouseEnter += Window_MouseEnter;
         MouseLeave += Window_MouseLeave;
 
@@ -139,6 +145,7 @@ public partial class MainWindow : Window
         _autoHideTimer.Stop();
         _tickTimer.Stop();
         _hotkeys.Dispose();
+        _topmost?.Dispose();
         CompositionTarget.Rendering -= AlignPopupTail;
         CompositionTarget.Rendering -= RenderDrag;
     }

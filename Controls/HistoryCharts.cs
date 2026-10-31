@@ -57,7 +57,7 @@ public sealed class DailyBars : FrameworkElement
     private const double Bottom = 22, Top = 12;
     private double Slot => _days.Count == 0 ? 1 : ActualWidth / _days.Count;
     private int? Index(double x) => _days.Count == 0 ? null : (int)Math.Clamp(Math.Floor(x / Slot), 0, _days.Count - 1);
-    private string? Tip(int? i) => i is not { } k ? null : $"{_days[k].Date:dddd, MMM d}\n" + (_days[k].Used is { } u ? $"{u * 100:0.#}% of the limit used" : "No readings that day");
+    private string? Tip(int? i) => i is not { } k ? null : $"{_days[k].Date:dddd, MMM d}\n" + (_days[k].Used is { } u ? $"{Ui.Limits(u)} of the limit ({u * 100:0.#}%)\n{Math.Round(_days[k].Coverage * 100):0}% of the day observed" : "No readings that day");
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -86,11 +86,19 @@ public sealed class DailyBars : FrameworkElement
             dc.DrawRoundedRectangle(fill, null, new Rect(x, Top + plot - h, width, h), Math.Min(6, width / 2), Math.Min(6, width / 2));
             if (highlight) dc.DrawRoundedRectangle(null, new Pen(Palette.Frozen(Palette.Alpha(t.Ink, .6)), 1), new Rect(x - 1, Top + plot - h - 1, width + 2, h + 2), 6, 6);
         }
+        if (max >= .9)
+        {
+            // One full limit, so bars read as "less than a limit" or "more than a limit" at a glance.
+            var full = Top + plot - plot * 1 / max;
+            dc.DrawLine(new Pen(Palette.Frozen(Palette.Alpha(t.Ink, .22)), 1), new Point(0, full), new Point(ActualWidth, full));
+            var label = ChartInk.Text(this, "1 full limit", 10, t.Faint);
+            dc.DrawText(label, new Point(0, Math.Max(0, full - label.Height - 1)));
+        }
         if (recorded.Length > 0)
         {
             var average = recorded.Average(); var y = Top + plot - plot * average / max;
             dc.DrawLine(ChartInk.Dashed(Palette.Alpha(t.Muted, .8)), new Point(0, y), new Point(ActualWidth, y));
-            var label = ChartInk.Text(this, $"avg {average * 100:0}%", 10, t.Muted);
+            var label = ChartInk.Text(this, $"average {Ui.Limits(average)}", 10, t.Muted);
             dc.DrawText(label, new Point(ActualWidth - label.Width, Math.Max(0, y - label.Height - 1)));
         }
         var step = _days.Count > 14 ? 7 : 1;
@@ -112,7 +120,7 @@ public sealed class CalendarGrid : FrameworkElement
     public CalendarGrid()
     {
         Height = 196; Cursor = System.Windows.Input.Cursors.Hand;
-        MouseMove += (_, e) => { var i = Hit(e.GetPosition(this)); if (i != _hover) { _hover = i; ToolTip = i is { } k ? $"{_days[k].Date:dddd, MMM d}\n" + (_days[k].Used is { } u ? $"{u * 100:0.#}% used" : "No readings") : null; InvalidateVisual(); } };
+        MouseMove += (_, e) => { var i = Hit(e.GetPosition(this)); if (i != _hover) { _hover = i; ToolTip = i is { } k ? $"{_days[k].Date:dddd, MMM d}\n" + (_days[k].Used is { } u ? $"{Ui.Limits(u)} of the limit · {Math.Round(_days[k].Coverage * 100):0}% of the day observed" : "No readings") : null; InvalidateVisual(); } };
         MouseLeave += (_, _) => { _hover = null; InvalidateVisual(); };
         MouseLeftButtonUp += (_, e) => { if (Hit(e.GetPosition(this)) is { } i && _days[i].Used is not null) DayClicked?.Invoke(_days[i]); };
         Theme.Changed += InvalidateVisual;
