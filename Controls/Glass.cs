@@ -153,7 +153,7 @@ public sealed class RollingNumber : FrameworkElement
 /// </summary>
 public sealed class GlassTabBar : Grid
 {
-    private readonly Border _drop = new() { CornerRadius = new CornerRadius(999), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch, IsHitTestVisible = false };
+    private readonly Border _drop = new() { CornerRadius = new CornerRadius(10), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch, IsHitTestVisible = false };
     private readonly TranslateTransform _move = new();
     private readonly ScaleTransform _stretch = new(1, 1);
     private readonly StackPanel _items = new() { Orientation = Orientation.Horizontal };
@@ -166,7 +166,8 @@ public sealed class GlassTabBar : Grid
     {
         _selected = selected;
         Height = height;
-        var surface = new Border { CornerRadius = new CornerRadius(999), BorderThickness = new Thickness(1), Padding = new Thickness(3) };
+        var surface = new Border { CornerRadius = new CornerRadius(13), BorderThickness = new Thickness(1), Padding = new Thickness(3),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 18, ShadowDepth = 3, Direction = 270, Opacity = .18 } };
         surface.SetResourceReference(Border.BackgroundProperty, "Ui.Glass");
         surface.SetResourceReference(Border.BorderBrushProperty, "Ui.Rim");
         Children.Add(surface);
@@ -174,6 +175,10 @@ public sealed class GlassTabBar : Grid
         _drop.SetResourceReference(Border.BackgroundProperty, "Ui.Selected");
         _drop.SetResourceReference(Border.BorderBrushProperty, "Ui.Rim");
         _drop.BorderThickness = new Thickness(1);
+        _drop.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 8, ShadowDepth = 1, Direction = 270, Opacity = .22 };
+        var dropSheen = new Border { CornerRadius = new CornerRadius(9), Margin = new Thickness(1), IsHitTestVisible = false };
+        dropSheen.SetResourceReference(Border.BackgroundProperty, "Ui.Sheen");
+        _drop.Child = dropSheen;
         _drop.RenderTransformOrigin = new Point(.5, .5);
         _drop.RenderTransform = new TransformGroup { Children = { _stretch, _move } };
         inner.Children.Add(_drop);
@@ -353,7 +358,7 @@ public static class Ui
     {
         var t = Theme.Current;
         var label = new TextBlock { Text = text, FontSize = size, FontWeight = FontWeights.SemiBold, FontFamily = Body, Foreground = Palette.Frozen(Palette.Readable(color, Palette.Lerp(t.Background, color, .16))) };
-        return new Border { CornerRadius = new CornerRadius(999), Padding = new Thickness(9, 3, 9, 3), Background = Palette.Frozen(Palette.Alpha(color, .16)), Child = label, VerticalAlignment = VerticalAlignment.Center };
+        return new Border { CornerRadius = new CornerRadius(7), Padding = new Thickness(8, 3, 8, 3), Background = Palette.Frozen(Palette.Alpha(color, .16)), Child = label, VerticalAlignment = VerticalAlignment.Center };
     }
 
     /// <summary>A glass capsule button that springs down under the pointer.</summary>
@@ -363,8 +368,17 @@ public static class Ui
         if (glyph is not null) row.Children.Add(Icon(glyph, 13, prominent ? "Ui.OnAccent" : "Ui.Text", new Thickness(0, 0, content is string { Length: > 0 } ? 8 : 0, 0)));
         if (content is string label) { if (label.Length > 0) row.Children.Add(Text(label, 12.5, FontWeights.SemiBold, prominent ? "Ui.OnAccent" : "Ui.Text", false)); }
         else if (content is UIElement element) row.Children.Add(element);
-        var button = new Border { CornerRadius = new CornerRadius(999), Padding = new Thickness(glyph is not null && content is "" ? 10 : 16, 8, glyph is not null && content is "" ? 10 : 16, 8), BorderThickness = new Thickness(1), Child = row, Cursor = System.Windows.Input.Cursors.Hand, Focusable = true, ToolTip = tooltip };
-        button.SetResourceReference(Border.BackgroundProperty, prominent ? "Ui.Accent" : "Ui.Inner");
+        // A rounded-rectangle key with a specular rim and a soft top sheen; prominent keys are filled with the accent.
+        var iconOnly = glyph is not null && content is "";
+        var layers = new Grid();
+        var sheen = new Border { CornerRadius = new CornerRadius(9), Margin = new Thickness(0), IsHitTestVisible = false };
+        sheen.SetResourceReference(Border.BackgroundProperty, "Ui.Sheen");
+        layers.Children.Add(sheen);
+        layers.Children.Add(new Border { Padding = new Thickness(iconOnly ? 9 : 15, 8, iconOnly ? 9 : 15, 8), Child = row });
+        var button = new Border { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = layers, Cursor = System.Windows.Input.Cursors.Hand, Focusable = true, ToolTip = tooltip,
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = prominent ? 14 : 8, ShadowDepth = prominent ? 2.5 : 1.2, Direction = 270, Opacity = prominent ? .28 : .14 } };
+        if (iconOnly) { button.MinWidth = 34; button.MinHeight = 34; }
+        button.SetResourceReference(Border.BackgroundProperty, prominent ? "Ui.AccentFill" : "Ui.Inner");
         button.SetResourceReference(Border.BorderBrushProperty, "Ui.Rim");
         System.Windows.Automation.AutomationProperties.SetName(button, tooltip ?? content as string ?? glyph ?? "Button");
         button.MouseEnter += (_, _) => { if (!prominent) button.SetResourceReference(Border.BackgroundProperty, "Ui.InnerHover"); else button.Opacity = .92; };
@@ -380,7 +394,7 @@ public static class Ui
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         if (leading is not null) { leading.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 7, 0)); row.Children.Add(leading); }
         row.Children.Add(Text(text, 12.5, selected ? FontWeights.SemiBold : FontWeights.Normal, selected ? "Ui.Text" : "Ui.Muted", false));
-        var chip = new Border { CornerRadius = new CornerRadius(999), Padding = new Thickness(13, 6, 13, 6), BorderThickness = new Thickness(1), Child = row, Margin = new Thickness(0, 0, 8, 8), Cursor = System.Windows.Input.Cursors.Hand };
+        var chip = new Border { CornerRadius = new CornerRadius(9), Padding = new Thickness(12, 6, 12, 6), BorderThickness = new Thickness(1), Child = row, Margin = new Thickness(0, 0, 8, 8), Cursor = System.Windows.Input.Cursors.Hand };
         chip.SetResourceReference(Border.BackgroundProperty, selected ? "Ui.Selected" : "Ui.Inner");
         chip.SetResourceReference(Border.BorderBrushProperty, selected ? "Ui.Rim" : "Ui.Hairline");
         chip.MouseLeftButtonDown += (_, e) => { Motion.Press(chip, true, reduced); e.Handled = true; };

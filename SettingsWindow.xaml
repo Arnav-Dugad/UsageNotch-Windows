@@ -143,13 +143,17 @@
             <Setter Property="Padding" Value="16,8" /><Setter Property="Cursor" Value="Hand" /><Setter Property="FontFamily" Value="{StaticResource UIFont}" />
             <Setter Property="FontSize" Value="12.5" /><Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
-                <Border x:Name="SegmentSurface" CornerRadius="999" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" Margin="2" BorderThickness="1" BorderBrush="Transparent">
-                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                </Border>
+                <Grid Margin="2">
+                    <Border x:Name="SegmentSurface" CornerRadius="9" Background="{TemplateBinding Background}" BorderThickness="1" BorderBrush="Transparent"/>
+                    <Border x:Name="SegmentSheen" CornerRadius="9" Margin="1" Background="{DynamicResource Ui.Sheen}" Opacity="0" IsHitTestVisible="False"/>
+                    <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Grid>
                 <ControlTemplate.Triggers>
                     <Trigger Property="IsChecked" Value="True">
                         <Setter TargetName="SegmentSurface" Property="Background" Value="{DynamicResource Ui.Selected}" />
                         <Setter TargetName="SegmentSurface" Property="BorderBrush" Value="{DynamicResource Ui.Rim}" />
+                        <Setter TargetName="SegmentSurface" Property="Effect"><Setter.Value><DropShadowEffect BlurRadius="8" ShadowDepth="1" Direction="270" Opacity="0.22" Color="Black"/></Setter.Value></Setter>
+                        <Setter TargetName="SegmentSheen" Property="Opacity" Value="1" />
                         <Setter Property="Foreground" Value="{DynamicResource Ui.Text}" />
                     </Trigger>
                     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SegmentSurface" Property="Opacity" Value="0.88" /></Trigger>
@@ -161,20 +165,24 @@
             <Setter Property="Background" Value="{DynamicResource Ui.Inner}" />
             <Setter Property="BorderBrush" Value="{DynamicResource Ui.Hairline}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="999" />
-            <Setter Property="Padding" Value="2" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="1" />
         </Style>
 
         <Style x:Key="SecondaryButton" TargetType="Button">
             <Setter Property="Foreground" Value="{DynamicResource Ui.Text}" /><Setter Property="Background" Value="{DynamicResource Ui.Inner}" /><Setter Property="BorderBrush" Value="{DynamicResource Ui.Hairline}" />
-            <Setter Property="BorderThickness" Value="1" /><Setter Property="Padding" Value="16,9" /><Setter Property="Cursor" Value="Hand" /><Setter Property="FontFamily" Value="{StaticResource UIFont}" />
+            <Setter Property="BorderThickness" Value="1" /><Setter Property="Padding" Value="15,8" /><Setter Property="Cursor" Value="Hand" /><Setter Property="FontFamily" Value="{StaticResource UIFont}" />
             <Setter Property="FontSize" Value="12.5" /><Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
             <Setter Property="RenderTransform"><Setter.Value><ScaleTransform/></Setter.Value></Setter>
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
-                <Border x:Name="ButtonSurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="999" Padding="{TemplateBinding Padding}">
-                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                </Border>
+                <Grid>
+                    <Border x:Name="ButtonSurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10">
+                        <Border.Effect><DropShadowEffect BlurRadius="10" ShadowDepth="1.5" Direction="270" Opacity="0.16" Color="Black"/></Border.Effect>
+                    </Border>
+                    <Border CornerRadius="10" Margin="1" Background="{DynamicResource Ui.Sheen}" IsHitTestVisible="False"/>
+                    <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Grid>
                 <ControlTemplate.Triggers>
                     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonSurface" Property="Background" Value="{DynamicResource Ui.InnerHover}" /></Trigger>
                     <Trigger Property="IsPressed" Value="True">
@@ -193,13 +201,26 @@
         </Style>
 
         <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
-            <Setter Property="Foreground" Value="{DynamicResource Ui.OnAccent}" /><Setter Property="Background" Value="{DynamicResource Ui.Accent}" /><Setter Property="BorderBrush" Value="{DynamicResource Ui.Rim}" />
+            <Setter Property="Foreground" Value="{DynamicResource Ui.OnAccent}" /><Setter Property="Background" Value="{DynamicResource Ui.AccentFill}" /><Setter Property="BorderBrush" Value="{DynamicResource Ui.Rim}" />
         </Style>
 
-        <Style x:Key="ChromeButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
-            <Setter Property="Width" Value="36"/><Setter Property="Height" Value="32"/><Setter Property="Padding" Value="0"/>
-            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/><Setter Property="FontSize" Value="11"/><Setter Property="FontWeight" Value="Normal"/>
-            <Setter Property="Background" Value="Transparent"/><Setter Property="BorderBrush" Value="Transparent"/>
+        <!-- Window controls stay flat until you point at them, as in Windows 11. -->
+        <Style x:Key="ChromeButton" TargetType="Button">
+            <Setter Property="Width" Value="40"/><Setter Property="Height" Value="32"/><Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource Ui.Muted}"/>
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/><Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="Surface" Background="Transparent" CornerRadius="8">
+                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="Surface" Property="Background" Value="{DynamicResource Ui.InnerHover}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource Ui.Text}"/>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="Surface" Property="Opacity" Value="0.7"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
         </Style>
 
         <Style TargetType="Slider">
@@ -257,14 +278,14 @@
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Expander">
                 <StackPanel>
-                    <ToggleButton x:Name="HeaderToggle" IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Cursor="Hand" Focusable="True">
+                    <ToggleButton x:Name="HeaderToggle" IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Foreground="{TemplateBinding Foreground}" Cursor="Hand" Focusable="True">
                         <ToggleButton.Template><ControlTemplate TargetType="ToggleButton">
                             <Border Background="Transparent" Padding="6,8">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock x:Name="Chevron" Text="&#xE76C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="{DynamicResource Ui.Muted}" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Margin="0,0,10,0">
                                         <TextBlock.RenderTransform><RotateTransform Angle="0"/></TextBlock.RenderTransform>
                                     </TextBlock>
-                                    <ContentPresenter VerticalAlignment="Center"/>
+                                    <ContentPresenter VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>
                                 </StackPanel>
                             </Border>
                             <ControlTemplate.Triggers>
@@ -809,7 +830,7 @@
                         </TabControl>
                     </Grid>
 
-                    <Border x:Name="FooterBar" Grid.Row="2" Style="{StaticResource Card}" Margin="22,0,22,16" Padding="18,10" Visibility="Collapsed" CornerRadius="999">
+                    <Border x:Name="FooterBar" Grid.Row="2" Style="{StaticResource Card}" Margin="22,0,22,16" Padding="18,10" Visibility="Collapsed" CornerRadius="18">
                         <Grid>
                             <TextBlock x:Name="UpdateFooter" Style="{StaticResource SecondaryText}" VerticalAlignment="Center" MaxWidth="520" HorizontalAlignment="Left"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

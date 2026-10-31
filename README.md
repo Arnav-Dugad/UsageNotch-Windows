@@ -1,10 +1,10 @@
-# UsageNotch for Windows
+﻿# UsageNotch for Windows
 
 A native Windows 11 edge-pinned usage monitor inspired by the open-source **Codenotch** macOS design. It shows how much of your Claude, Codex, Gemini and Cursor limits you have left, and when they reset.
 
 ## Download
 
-**[Download page with setup guide → arnav-dugad.github.io/UsageNotch-Windows](https://arnav-dugad.github.io/UsageNotch-Windows/)**
+**[Download page with setup guide â†’ arnav-dugad.github.io/UsageNotch-Windows](https://arnav-dugad.github.io/UsageNotch-Windows/)**
 
 | Get | File | Link |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ A native Windows 11 edge-pinned usage monitor inspired by the open-source **Code
 
 Phone sharing is built into UsageNotch for Windows 2.3 and later. The separate UsageNotch Link download is only for 2.2 and older.
 
-No installer or .NET runtime is needed. Download `UsageNotch.exe` and double-click it. The app isn't code-signed, so if Windows SmartScreen appears, choose **More info → Run anyway**. Installed copies update themselves from GitHub Releases after verifying a signed update manifest.
+No installer or .NET runtime is needed. Download `UsageNotch.exe` and double-click it. The app isn't code-signed, so if Windows SmartScreen appears, choose **More info â†’ Run anyway**. Installed copies update themselves from GitHub Releases after verifying a signed update manifest.
 
 ## 2.6: one design on Windows and Android
 
@@ -28,7 +28,7 @@ Stats & Settings is rebuilt in the liquid glass of UsageNotch for Android: **Ove
 
 ## Your usage on your phone
 
-1. Open **Settings → Phone** and turn on **Share usage with paired phones**. Allow Private networks if Windows Firewall asks.
+1. Open **Settings â†’ Phone** and turn on **Share usage with paired phones**. Allow Private networks if Windows Firewall asks.
 2. In UsageNotch for Android, tap **Scan QR code** and point the phone at the code. No app yet? Scan it with the phone's camera: the page that opens offers the download, then pairs in one tap.
 
 The phone shows the dock's rings, labels, account names (when the dock shows them), countdowns and 24-hour charts, plus home-screen widgets in any size and reset alerts. Phones connect over HTTPS pinned to this PC's own certificate with a random 256-bit key. Only percentages, limits, reset times and recent readings are shared; your AI sign-ins never leave Windows. **Revoke all paired phones** invalidates every code at once.
@@ -39,11 +39,11 @@ Optional **internet sync** brings readings to your phone on mobile data and keep
 
 ## For development
 
-**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.6.0**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
+**Start here:** double-click **UsageNotch (Latest)**, or open `Release/Latest/UsageNotch.exe`. Current release: **2.6.1**. Older releases are kept in `Release/Archive`, not mixed with the current app. See [quick start](HOW-TO-USE.md).
 
 2.2 simplifies Stats and adds customizable dock text, animated sample previews and clean AM/PM clocks. Reset times appear in expanded cards by default; collapsed-dock reset labels are optional. Claude and Codex remain visible together, with unlimited local history and explainable estimates. Download the latest app from [GitHub Releases](https://github.com/Arnav-Dugad/UsageNotch-Windows/releases/latest).
 
-**Dock** settings control provider names, percentages, secondary percentages, the “left” suffix, window labels, saved-reading badges and reset-time placement. Custom dock labels are available for Claude, Codex, Gemini and Cursor. Compact mode hides all dock text. Sample previews animate visual changes and respect reduced-motion preferences; edits also preview on the real dock until Save or Cancel.
+**Dock** settings control provider names, percentages, secondary percentages, the â€œleftâ€ suffix, window labels, saved-reading badges and reset-time placement. Custom dock labels are available for Claude, Codex, Gemini and Cursor. Compact mode hides all dock text. Sample previews animate visual changes and respect reduced-motion preferences; edits also preview on the real dock until Save or Cancel.
 
 **Time & Stats** offers 12-hour AM/PM (default), 24-hour time, optional clock seconds, and a detailed Stats default. The main Stats cards show usage, reset time, a short estimate and the chart. **Explore history** reveals overview navigation, sessions, patterns and events. Existing observations, credentials and other preferences are preserved.
 
@@ -74,7 +74,7 @@ Account names use Claude Code's local profile or Codex's documented [`account/re
 
 Open **Stats & Settings** from the dock or tray. Claude and Codex appear together with separate window labels and percentages. Choose a limit within either card and 24-hour, 7-day, 30-day or all-history range. Charts always show percentage **used**, independently of the dock's used/remaining preference. Gaps and resets are not joined. Drag a chart or its overview to inspect an interval, hover for exact observations, use Ctrl+wheel to zoom, or choose Reset period. All-history navigation samples first/last/min/max readings in SQLite; raw readings remain intact. Select at most 32 days to load exact readings.
 
-Dashed projections and scenario shading begin after the last observation. The shading spans the 10th–90th percentile observed interval rates, not a probability or confidence interval. Confidence disclosures show sample counts, coverage of the three-hour lookback and normalized rate variability. **Limited history** means less than 90 minutes or six rate samples; otherwise a coefficient of variation above 0.75 is **Highly variable usage**, with lower variability labelled **Consistent pace**. These are descriptive quality labels, not calibrated accuracy guarantees.
+Dashed projections and scenario shading begin after the last observation. The shading spans the 10thâ€“90th percentile observed interval rates, not a probability or confidence interval. Confidence disclosures show sample counts, coverage of the three-hour lookback and normalized rate variability. **Limited history** means less than 90 minutes or six rate samples; otherwise a coefficient of variation above 0.75 is **Highly variable usage**, with lower variability labelled **Consistent pace**. These are descriptive quality labels, not calibrated accuracy guarantees.
 
 Observed work sessions are consecutive observation spans separated by gaps over 20 minutes, not keyboard/activity tracking. Their consumption sums positive continuous-period deltas; peak pace is an observed interval rate and can reflect provider rounding. Resets and missing intervals are excluded. Personal patterns use the last 28 days in local time and show coverage hours/date counts. They need at least seven observed dates, with at least three dates per hour or two per weekday and one covered hour per cell. Insufficient coverage stays unknown. Insights link to their chart intervals. Events distinguish confirmed resets from unconfirmed window changes and unavailable readings from provider-wide outages.
 
@@ -134,7 +134,7 @@ follows the pointer, and a settings window that edits the running dock rather th
 **One outline, continuously morphed.** The dock is drawn from a single parametric path.
 Free-floating it is a capsule; clinging to a screen edge it is a teardrop. Both shapes are
 described by the same five curve segments, so every value in between is a real shape rather
-than a cross-fade — you can watch it stretch out of the edge as you drag it away, and pour
+than a cross-fade â€” you can watch it stretch out of the edge as you drag it away, and pour
 back into the edge as you bring it home.
 
 **Magnetic edges.** Drag the dock anywhere. Within about 150 px of a screen edge it starts
@@ -143,7 +143,7 @@ pointer, in proportion to how close you are. Release inside that pull and it sna
 release outside it and it stays a free capsule wherever you dropped it.
 
 **Drag to set the vertical position.** While the dock is on an edge, dragging up and down
-slides it along that edge and stores the new position — no slider needed. The Appearance
+slides it along that edge and stores the new position â€” no slider needed. The Appearance
 slider and the drag stay in sync in both directions.
 
 **Dock magnification.** Hovering a provider lifts it and leans it out of the dock, and its
@@ -153,7 +153,7 @@ neighbours follow at a smaller amplitude, so the whole column reacts to the poin
 a true angular gradient and a lit head, and a glow that grows with usage. Above 90% the glow
 breathes; when a reading actually moves the head blooms briefly so a refresh is felt rather
 than guessed at. Loading is a comet-tail spinner, unknown values are a dotted ring, and
-sign-in/error states get a dotted ring plus a badge — a broken provider never looks like a
+sign-in/error states get a dotted ring plus a badge â€” a broken provider never looks like a
 healthy 0%.
 
 **Detail card.** Hovering a ring opens a card with the provider, a live/saved/error status
@@ -162,7 +162,7 @@ one row per limit window with a gradient meter, exact percentage, reported amoun
 reset countdown. Meters stagger in.
 
 **Live settings.** Every control in the settings window edits the running dock the moment you
-touch it — size, spacing, position, opacity, colour, mode, compact, glass, providers,
+touch it â€” size, spacing, position, opacity, colour, mode, compact, glass, providers,
 hotkeys, alerts. **Save changes** keeps them; **Cancel**, Escape or closing the window puts
 everything back exactly as it was. The settings window is modeless, so you can keep dragging
 and hovering the dock while you tune it.
@@ -173,16 +173,16 @@ Other things in 1.6:
 - Launching UsageNotch again reveals the running dock instead of doing nothing, and
   `UsageNotch.exe --settings` opens settings on the running dock.
 - Multi-monitor aware: the dock docks to the edge of whichever screen you left it on.
-- **Compact dock** — smaller rings, no labels, a narrower notch.
-- **Hide until hover** — the dock tucks off-screen after a configurable delay and glides back
+- **Compact dock** â€” smaller rings, no labels, a narrower notch.
+- **Hide until hover** â€” the dock tucks off-screen after a configurable delay and glides back
   when the pointer touches the screen edge.
-- **Click-through** — make the dock ignore the mouse entirely; turn it back off from the tray.
-- **Global hotkeys** — chords to show/hide the dock and to refresh every provider.
-- **Threshold alerts** — Windows notifications at a warning level and an urgent level, plus an
+- **Click-through** â€” make the dock ignore the mouse entirely; turn it back off from the tray.
+- **Global hotkeys** â€” chords to show/hide the dock and to refresh every provider.
+- **Threshold alerts** â€” Windows notifications at a warning level and an urgent level, plus an
   optional note when a limit resets. Each window fires once per level per reset period, and
   the state survives restarts.
-- **Start with Windows** — a per-user run entry, written only when you ask for it.
-- **Rebuilt settings** — sidebar navigation across Display, Appearance, Behaviour, Alerts,
+- **Start with Windows** â€” a per-user run entry, written only when you ask for it.
+- **Rebuilt settings** â€” sidebar navigation across Display, Appearance, Behaviour, Alerts,
   Providers and API budgets, with a live ring preview and a readout beside every slider.
 
 Settings include:
@@ -220,4 +220,4 @@ UI concept/design inspired by: https://github.com/vinzdg/codenotch (MIT License)
 
 Provider marks: Simple Icons v14 (OpenAI, Claude, Google Gemini) and Lobe Icons (Cursor), obtained from their published SVG sources. Marks belong to their respective owners; UsageNotch is an independent app and is not endorsed by those providers.
 Sources: https://cdn.jsdelivr.net/npm/simple-icons@14/icons/ and https://github.com/lobehub/lobe-icons/blob/master/packages/static-svg/icons/cursor.svg
-The corresponding notice is embedded in the EXE and available through Settings → Icon credits.
+The corresponding notice is embedded in the EXE and available through Settings â†’ Icon credits.

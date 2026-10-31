@@ -82,6 +82,12 @@ public static class Theme
         sheen.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0xFF, 0xFF, 0xFF), .5));
         sheen.Freeze();
         resources["Ui.Sheen"] = sheen;
+        // Prominent keys: the accent, a touch lighter at the top, like a lit glass key.
+        var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        fill.GradientStops.Add(new GradientStop(Palette.Lighten(t.Accent, t.Dark ? .18 : .12), 0));
+        fill.GradientStops.Add(new GradientStop(t.Dark ? t.Accent : Palette.Darken(t.Accent, .06), 1));
+        fill.Freeze();
+        resources["Ui.AccentFill"] = fill;
         if (changed) Changed?.Invoke();
     }
 

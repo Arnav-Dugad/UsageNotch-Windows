@@ -156,7 +156,7 @@ public partial class SettingsWindow
     {
         _statusDot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 9, 0) };
         _statusText = Ui.Text("", 12.5, FontWeights.SemiBold, "Ui.Text", false);
-        var capsule = new Border { CornerRadius = new CornerRadius(999), Padding = new Thickness(14, 7, 14, 7), BorderThickness = new Thickness(1), Child = Ui.Row(0, _statusDot, _statusText), VerticalAlignment = VerticalAlignment.Center };
+        var capsule = new Border { CornerRadius = new CornerRadius(11), Padding = new Thickness(13, 7, 13, 7), BorderThickness = new Thickness(1), Child = Ui.Row(0, _statusDot, _statusText), VerticalAlignment = VerticalAlignment.Center };
         capsule.SetResourceReference(Border.BackgroundProperty, "Ui.Glass");
         capsule.SetResourceReference(Border.BorderBrushProperty, "Ui.Rim");
         var refresh = Ui.Button("", () => { if (_coordinator is not null) _ = _coordinator.RefreshAllAsync(); }, false, "", Reduced, "Refresh every provider");
