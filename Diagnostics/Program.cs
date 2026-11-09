@@ -52,6 +52,9 @@ internal static class Program
             var sampleSettings = new AppSettings { ShowAccountNames = true, ReviewSession = true };
             var sampleHistory = new UsageHistory(Path.Combine(dir, "history.db"));
             var start = DateTimeOffset.UtcNow.AddHours(-3); var reset = DateTimeOffset.UtcNow.AddHours(2);
+            // Two earlier weeks of Claude sessions, so "This week" and all-time totals have something to say.
+            foreach (var p in ReportChecks.TwoWeeks(DateTime.Today.AddDays(-1)))
+                sampleHistory.Record(new ProviderSnapshot("claude", "Claude", "", Fidelity.Official, SnapshotStatus.Ok, [new("five_hour", "Current session", p.Used, p.Reset), new("seven_day", "All models", .2, reset.AddDays(4))], FetchedAt: p.At, AccountName: "Sample"), p.At);
             List<ProviderSnapshot> live = [];
             for (var i = 0; i <= 36; i++)
             {
@@ -71,6 +74,14 @@ internal static class Program
                 return SharedSettings.ToJson(sampleSettings);
             };
             link.Update(live);
+            link.ExtrasProvider = () =>
+            {
+                var now = DateTimeOffset.UtcNow;
+                WindowSummary? Summary(ProviderViewModel p, LimitWindow w) { lock (sampleHistory) return HistoryInsights.Summarize(sampleHistory.Read(p.Id, sampleHistory.AccountKey(p.Snapshot), w.Id, now.AddDays(-91)), [], now); }
+                AllTimeTotals? AllTime(ProviderSnapshot s, LimitWindow w) { var c = new HistoryInsights.AllTimeCounter(); lock (sampleHistory) sampleHistory.ForEach(s.Id, sampleHistory.AccountKey(s), w.Id, c.Add); return c.Result(); }
+                var report = WeeklyReport.Build(live.Select(x => new ProviderViewModel(x, sampleSettings)).ToArray(), Summary, [], true, now, false);
+                return new UsageNotch.Services.Phone.PhoneSnapshot.Extras(false, [], [], true, Report: report, AllTime: AllTime);
+            };
             if (!link.StartAsync(loopbackOnly: true).GetAwaiter().GetResult()) { Console.WriteLine("Couldn't start: " + link.Status); return 1; }
             var code = link.EnsureIdentity().CompactCode("10.0.2.2");
             File.WriteAllText(Path.Combine(Path.GetTempPath(), "usagenotch-e2e-code.txt"), code);
@@ -136,6 +147,8 @@ internal static class Program
             Console.WriteLine(updates.Status); return updates.Status.Contains("up to date") || updates.Ready ? 0 : 1;
         }
         if (args.Contains("--workspace-preview")) return WorkspacePreview();
+        if (args.Contains("--shots")) return Shots.Run();
+        if (args.Contains("--report-real")) return RealReport.Run();
         if (args.Contains("--preview")) return Preview();
         if (args.Contains("--connect-gemini")) { GeminiSignIn.Launch(); return 0; }
         if (args.Contains("--check") || args.Contains("--upgrade-check"))
@@ -160,6 +173,7 @@ internal static class Program
         HistoryUpdateChecks.Run();
         PlanningChecks.Run();
         LayoutChecks.Run();
+        ReportChecks.Run(Path.Combine(Environment.CurrentDirectory, "Diagnostics", "Artifacts", "Report"));
         WorkspaceChecks.Run();
         UpgradeChecks.Run();
         CheckClaudeCooldown();

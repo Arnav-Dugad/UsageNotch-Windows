@@ -13,6 +13,8 @@ public partial class App : System.Windows.Application
     private AppSettings? _settings;
     private System.Windows.Forms.NotifyIcon? _tray;
     private System.Drawing.Icon? _trayIcon;
+    private System.Drawing.Icon? _liveIcon;
+    private string? _liveKey;
     private System.Windows.Forms.ToolStripMenuItem? _autoHideItem;
     private System.Windows.Forms.ToolStripMenuItem? _compactItem;
     private System.Windows.Forms.ToolStripMenuItem? _clickThroughItem;
@@ -33,6 +35,7 @@ public partial class App : System.Windows.Application
         base.OnStartup(e);
         if (IsReviewSession) return;
         if (await UpdateService.ApplyFromArgumentsAsync(e.Args)) { Shutdown(); return; }
+        var firstRun = !SettingsStore.Exists();
         var settings = SettingsStore.Load();
         _settings = settings;
 
@@ -80,11 +83,28 @@ public partial class App : System.Windows.Application
         };
         _tray.DoubleClick += (_, _) => _mainWindow.ToggleVisibility();
         _tray.ContextMenuStrip = BuildTrayMenu(settings);
+        _coordinator.Refreshed += UpdateTray;
 
         StartSignalListener();
         _ = _coordinator.StartAsync();
         _ = Updates.RunAsync(settings);
         if (wantsSettings) _mainWindow.OpenSettings();
+        else ShowWelcomeOrWhatsNew(settings, firstRun);
+    }
+
+    /// <summary>A welcome on the first launch, or "What's new" once after an update. Never both, never twice.</summary>
+    private void ShowWelcomeOrWhatsNew(AppSettings settings, bool firstRun)
+    {
+        var version = typeof(App).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}" : "";
+        if (settings.LastSeenVersion == version || version.Length == 0) return;
+        settings.LastSeenVersion = version;
+        SettingsStore.Save(settings);
+        var main = _mainWindow;
+        // After the dock has appeared, so the sheet sits in front of it.
+        _ = Dispatcher.BeginInvoke(() =>
+        {
+            try { new Controls.WhatsNewWindow(settings, firstRun, () => main?.OpenSettings(history: true), () => main?.OpenSettings()).Show(); } catch { }
+        }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
     }
 
     private const string ShowSignalName = @"Local\UsageNotch.Show";
@@ -246,6 +266,7 @@ public partial class App : System.Windows.Application
             _tray.Dispose();
         }
         _trayIcon?.Dispose();
+        _liveIcon?.Dispose();
         if (_instanceMutex is not null)
         {
             try { _instanceMutex.ReleaseMutex(); } catch (ApplicationException) { }
@@ -267,7 +288,8 @@ public partial class App : System.Windows.Application
         var coordinator = _coordinator;
         _coordinator.Refreshed += () => phone.Update(_coordinator.Items.Select(item => item.Snapshot).ToList());
         phone.RefreshRequested = coordinator.RefreshForPhoneAsync;
-        phone.ExtrasProvider = () => new Services.Phone.PhoneSnapshot.Extras(false, coordinator.TokenReports(), coordinator.Health.Active, settings.ShareProjectsWithPhone);
+        phone.ExtrasProvider = () => new Services.Phone.PhoneSnapshot.Extras(false, coordinator.TokenReports(), coordinator.Health.Active, settings.ShareProjectsWithPhone,
+            Report: coordinator.WeekReportFor(settings.ShareProjectsWithPhone), AllTime: coordinator.AllTimeFor);
         phone.SettingsReceived = shared => Dispatcher.Invoke(() =>
         {
             var now = DateTimeOffset.UtcNow;
@@ -293,9 +315,30 @@ public partial class App : System.Windows.Application
         });
     }
 
+    /// <summary>Redraws the tray ring and tooltip after each refresh; only when the number or colours change.</summary>
+    private void UpdateTray()
+    {
+        if (_tray is null || _coordinator is null || _settings is null) return;
+        try
+        {
+            _tray.Text = Services.TrayRing.Tooltip(_coordinator.Items, VersionLabel);
+            var primary = _settings.LiveTrayIcon ? Services.TrayRing.Primary(_coordinator.Items) : null;
+            var dark = Services.TrayRing.TaskbarDark();
+            var key = primary is null ? null : $"{Math.Round(primary.UsedFraction!.Value * 100)}|{_settings.ShowRemaining}|{dark}";
+            if (key == _liveKey) return;
+            var old = _liveIcon;
+            _liveIcon = primary is null ? null : Services.TrayRing.Draw(primary.UsedFraction!.Value, _settings.ShowRemaining, dark);
+            _tray.Icon = _liveIcon ?? _trayIcon;
+            _liveKey = key;
+            old?.Dispose();
+        }
+        catch { }
+    }
+
     public void ApplySettings(AppSettings settings)
     {
         if (_tray is not null) _tray.Visible = settings.ShowTrayIcon;
+        UpdateTray();
         if (_mainWindow is not null) _mainWindow.Topmost = settings.AlwaysVisible;
         if (_autoHideItem is not null) _autoHideItem.Checked = settings.AutoHide;
         if (_compactItem is not null) _compactItem.Checked = settings.CompactMode;

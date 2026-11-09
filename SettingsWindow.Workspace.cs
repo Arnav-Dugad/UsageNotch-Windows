@@ -90,6 +90,9 @@ public partial class SettingsWindow
         BuildManualEditors(); UpdateAmbient(); StatsView.Refresh();
     }
 
+    private void WhatsNew_Click(object sender, RoutedEventArgs e) =>
+        new Controls.WhatsNewWindow(_settings, false, ShowHistoryTab, null) { Owner = this }.ShowDialog();
+
     private void ApplyTheme()
     {
         Theme.Apply(Resources, _settings);
@@ -362,6 +365,19 @@ public partial class SettingsWindow
             try { int rows; lock (history) rows = history.ExportCsv(dialog.FileName); message.Text = $"Exported {rows:N0} readings."; }
             catch (Exception e) { message.Text = "Export failed: " + e.Message; }
         }, false, "\uEDE1", Reduced).WithGap());
+        actions.Children.Add(Ui.Button("Delete history…", async () =>
+        {
+            var (_, counts, _) = await Task.Run(() => { lock (history) return (0L, history.Counts(), 0L); });
+            var since = counts.Since is { } first ? $" since {first.ToLocalTime():MMM d, yyyy}" : "";
+            var answer = System.Windows.MessageBox.Show(this,
+                $"Delete all {counts.Readings:N0} readings{since} from this PC?\n\nHistory, all-time totals and This week start again from the next reading. Live usage keeps working. Your phone keeps its own copy until you delete it there.\n\nThis can't be undone. To keep a copy, choose Export CSV first.",
+                "Delete usage history", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+            if (answer != MessageBoxResult.Yes) return;
+            message.Text = "Deleting…";
+            var ok = await Task.Run(() => _coordinator!.DeleteHistory());
+            message.Text = ok ? "History deleted. New readings start a fresh history." : "History is busy; try again in a moment.";
+            Load(); HistoryPageView.Refresh();
+        }, false, "\uE74D", Reduced).WithGap());
         stack.Children.Add(actions);
         stack.Children.Add(Ui.Text("Local token history", 13.5, FontWeights.SemiBold));
         stack.Children.Add(tokenLine);

@@ -14,7 +14,8 @@ public sealed record AlertNotice(string Title, string Message, bool Critical, st
 public sealed record AlertContext(
     IReadOnlyDictionary<string, PaceForecast?> Paces,
     IReadOnlyDictionary<string, StartHint?> Starts,
-    IReadOnlyDictionary<string, WindowSummary?> Summaries)
+    IReadOnlyDictionary<string, WindowSummary?> Summaries,
+    WeekReport? Report = null)
 {
     public static readonly AlertContext Empty = new(new Dictionary<string, PaceForecast?>(), new Dictionary<string, StartHint?>(), new Dictionary<string, WindowSummary?>());
     public static string Key(string provider, string window) => provider + "|" + window;
@@ -184,6 +185,9 @@ public sealed class AlertService
     {
         var local = now.ToLocalTime();
         if (local.DayOfWeek != DayOfWeek.Sunday || local.Hour < 18) return null;
+        // The weekly report's headline and first sentences, as History and the phone show them.
+        if (context.Report is { Insights.Count: > 0 } report)
+            return new AlertNotice("Your week in AI usage", report.Headline + ". " + string.Join(" ", report.Insights.Take(2).Select(i => i.Text)), false, items.FirstOrDefault()?.Id ?? "", null);
         var lines = new List<string>(); DayUsage? busiest = null; string? busiestName = null; var streak = 0;
         foreach (var item in items)
         {

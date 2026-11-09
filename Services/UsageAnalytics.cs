@@ -18,12 +18,19 @@ public static class UsageAnalytics
     {
         if (b.At <= a.At) return (0, false);
         var timed = b.At - a.At <= TimeSpan.FromMinutes(20);
-        var renewed = a.Reset is { } oldReset && oldReset <= b.At + TimeSpan.FromMinutes(1) && (b.Reset is null || b.Reset > oldReset.AddMinutes(2));
         // A big drop is a renewal; a small one is the provider's rounding and adds nothing.
-        if (renewed || b.Used < a.Used - .1) return (Math.Max(0, b.Used), false);
+        if (Renewed(a, b)) return (Math.Max(0, b.Used), false);
         if (b.Used < a.Used) return (0, timed && a.Period == b.Period);
         return (Math.Max(0, b.Used - a.Used), timed && a.Period == b.Period);
     }
+    /// <summary>
+    /// Whether the limit renewed between two readings: the old reset time passed and the provider reported a later one,
+    /// or usage dropped by more than 10 points. A reset time that drifts by a minute, a gap while the PC slept, or a
+    /// rolling reset that moves forward while nothing is used are not renewals.
+    /// </summary>
+    public static bool Renewed(UsagePoint a, UsagePoint b) =>
+        b.At > a.At && (a.Reset is { } oldReset && oldReset <= b.At + TimeSpan.FromMinutes(1) && (b.Reset is null || b.Reset > oldReset.AddMinutes(2)) || b.Used < a.Used - .1);
+
     public static IReadOnlyList<ObservedSession> Sessions(IReadOnlyList<UsagePoint> points, IReadOnlyList<UsageEvent> events)
     {
         var result = new List<ObservedSession>();

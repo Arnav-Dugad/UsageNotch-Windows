@@ -157,6 +157,21 @@ public sealed class UsageHistory
         return points;
     }
 
+    /// <summary>Streams every reading of one window, oldest first, without holding them all in memory.</summary>
+    public void ForEach(string provider, string account, string window, Action<UsagePoint> visit)
+    {
+        try
+        {
+            using var connection = Open(); using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT at,used,reset,period FROM observations WHERE provider=$p AND account=$a AND window=$w ORDER BY at";
+            cmd.Parameters.AddWithValue("$p", provider); cmd.Parameters.AddWithValue("$a", account); cmd.Parameters.AddWithValue("$w", window);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read()) visit(new(DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(0)), reader.GetDouble(1),
+                reader.IsDBNull(2) ? null : DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(2)), reader.GetString(3)));
+        }
+        catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException) { Error = "History is temporarily unavailable. Live usage still works."; }
+    }
+
     public IReadOnlyList<UsageEvent> ReadEvents(string provider, string account, string window, DateTimeOffset since)
     {
         var events = new List<UsageEvent>();
@@ -213,6 +228,21 @@ public sealed class UsageHistory
             return (r.GetInt64(0), r.GetInt64(1), r.IsDBNull(2) ? null : DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(2)));
         }
         catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException) { return (0, 0, null); }
+    }
+
+    /// <summary>Deletes every reading, event and saved provider state, then reclaims the space. Cannot be undone.</summary>
+    public bool DeleteAll()
+    {
+        try
+        {
+            using var connection = Open(); using var cmd = connection.CreateCommand();
+            cmd.CommandText = "DELETE FROM observations; DELETE FROM history_events; DELETE FROM provider_state;";
+            cmd.ExecuteNonQuery();
+            cmd.CommandText = "VACUUM"; cmd.ExecuteNonQuery();
+            Error = null;
+            return true;
+        }
+        catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException) { return false; }
     }
 
     /// <summary>Rebuilds the database file to reclaim space. Readings are kept.</summary>

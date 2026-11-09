@@ -35,6 +35,8 @@ foreach ($theme in 'dark', 'light') {
     }
     [void]$cs.AppendLine('    }')
 }
+[void]$cs.AppendLine('    public static class TypeScale { ' + (($tokens.typeScale.PSObject.Properties | ForEach-Object { "public const double $(Pascal $_.Name) = $(Num $_.Value);" }) -join ' ') + ' }')
+[void]$cs.AppendLine('    public static class Spacing { ' + (($tokens.spacing.PSObject.Properties | ForEach-Object { "public const double $(Pascal $_.Name) = $(Num $_.Value);" }) -join ' ') + ' }')
 [void]$cs.AppendLine('    public static class Radius { ' + (($tokens.radius.PSObject.Properties | ForEach-Object { "public const double $(Pascal $_.Name) = $(Num $_.Value);" }) -join ' ') + ' }')
 [void]$cs.AppendLine('    public static class Motion')
 [void]$cs.AppendLine('    {')
@@ -65,6 +67,8 @@ foreach ($theme in 'dark', 'light') {
     }
     [void]$kt.AppendLine('    }')
 }
+[void]$kt.AppendLine('    object TypeScale { ' + (($tokens.typeScale.PSObject.Properties | ForEach-Object { "const val $($_.Name) = $(Num $_.Value)f" }) -join '; ') + ' }')
+[void]$kt.AppendLine('    object Spacing { ' + (($tokens.spacing.PSObject.Properties | ForEach-Object { "const val $($_.Name) = $(Num $_.Value)f" }) -join '; ') + ' }')
 [void]$kt.AppendLine('    object Radius { ' + (($tokens.radius.PSObject.Properties | ForEach-Object { "const val $($_.Name) = $(Num $_.Value)f" }) -join '; ') + ' }')
 [void]$kt.AppendLine('    object Motion {')
 foreach ($p in $tokens.motion.PSObject.Properties | Where-Object Name -ne 'springs') { [void]$kt.AppendLine("        const val $($p.Name) = $($p.Value)") }

@@ -19,6 +19,9 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
     private bool _disposed;
 
     public ObservableCollection<ProviderViewModel> Items { get; } = [];
+    private volatile ProviderViewModel[] _itemsCopy = [];
+    /// <summary>A copy of Items that background threads (the phone server, reports) can read safely.</summary>
+    public IReadOnlyList<ProviderViewModel> ItemsSnapshot => _itemsCopy;
     public AlertService Alerts { get; }
     public UsageHistory History { get; }
     public LocalTokenUsage Tokens { get; } = new();
@@ -89,6 +92,7 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
                 Items.Move(existingIndex, i);
         }
         foreach (var item in Items) item.RefreshAppearance();
+        _itemsCopy = Items.ToArray();
     }
 
     public async Task StartAsync()
@@ -233,6 +237,48 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
         return value;
     }
 
+    private readonly Dictionary<string, (DateTimeOffset At, AllTimeTotals? Value)> _allTime = new();
+
+    /// <summary>Deletes this PC's usage history and forgets every summary built from it.</summary>
+    public bool DeleteHistory()
+    {
+        bool ok;
+        lock (History) ok = History.DeleteAll();
+        lock (_summaries) _summaries.Clear();
+        lock (_allTime) _allTime.Clear();
+        lock (_reports) _reports.Clear();
+        Phone.PhoneSnapshot.ClearCache();
+        return ok;
+    }
+
+    /// <summary>Everything ever recorded for one window, streamed from the database; cached for 30 minutes.</summary>
+    public AllTimeTotals? AllTimeFor(ProviderSnapshot snapshot, LimitWindow window)
+    {
+        var now = DateTimeOffset.UtcNow;
+        string key, account;
+        lock (History) { account = History.AccountKey(snapshot); key = snapshot.Id + "|" + account + "|" + window.Id; }
+        lock (_allTime) if (_allTime.TryGetValue(key, out var cached) && now - cached.At < TimeSpan.FromMinutes(30)) return cached.Value;
+        var counter = new HistoryInsights.AllTimeCounter();
+        try { lock (History) History.ForEach(snapshot.Id, account, window.Id, counter.Add); } catch { }
+        var value = counter.Result();
+        lock (_allTime) _allTime[key] = (now, value);
+        return value;
+    }
+
+    private readonly Dictionary<bool, (DateTimeOffset At, WeekReport? Value)> _reports = new();
+
+    /// <summary>"This week" across every provider, in dock order; cached for five minutes. Project names only when asked for.</summary>
+    public WeekReport? WeekReportFor(bool projects = true, bool fresh = false)
+    {
+        var now = DateTimeOffset.UtcNow;
+        lock (_reports) if (!fresh && _reports.TryGetValue(projects, out var cached) && now - cached.At < TimeSpan.FromMinutes(5)) return cached.Value;
+        WeekReport? value = null;
+        try { value = WeeklyReport.Build(ItemsSnapshot.Where(i => i.Status != SnapshotStatus.Loading).ToArray(), (p, w) => SummaryFor(p.Snapshot, w), TokenReports(), projects, now, _settings.Use24HourTime); }
+        catch { }
+        lock (_reports) _reports[projects] = (now, value);
+        return value;
+    }
+
     public StartHint? BestStartFor(ProviderViewModel item)
     {
         if (item.SessionWindow is not { } session || SummaryFor(item.Snapshot, session) is not { } summary) return null;
@@ -248,7 +294,9 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
             if (item.SessionWindow is { } session) summaries[AlertContext.Key(item.Id, session.Id)] = SummaryFor(item.Snapshot, session);
             if (_settings.AlertGoodMoment) starts[item.Id] = BestStartFor(item);
         }
-        return new AlertContext(paces, starts, summaries);
+        var local = DateTimeOffset.Now;
+        var report = _settings.WeeklyRecap && local.DayOfWeek == DayOfWeek.Sunday && local.Hour >= 18 ? WeekReportFor() : null;
+        return new AlertContext(paces, starts, summaries, report);
     }
 
     private static async Task OnUi(Action action)
@@ -267,6 +315,7 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
             _lastChange = DateTimeOffset.UtcNow;
         if (existing is null) Items.Add(new ProviderViewModel(snapshot, _settings));
         else existing.Snapshot = snapshot;
+        _itemsCopy = Items.ToArray();
     }
 
     private static ProviderSnapshot LoadingSnapshot(IUsageProvider provider) => new(
@@ -291,7 +340,7 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
         if (!fresh && _tokenReports is { } cached && now - cached.At < TimeSpan.FromMinutes(1)) return cached.Reports;
         var reports = Tokens.Reports(_settings, now).ToList();
         // Codex accounts report their own totals across devices; prefer those to this PC's transcripts.
-        foreach (var item in Items.Where(i => i.Kind == "codex" && i.Snapshot.Tokens is { Days.Count: > 0 }))
+        foreach (var item in ItemsSnapshot.Where(i => i.Kind == "codex" && i.Snapshot.Tokens is { Days.Count: > 0 }))
         {
             var local = reports.FirstOrDefault(r => r.Source == item.Id);
             var merged = TokenReport.WithAccount(local, item.Id, item.DisplayName, item.Snapshot.Tokens!, now);

@@ -34,7 +34,7 @@ public sealed class AmbientBackground : FrameworkElement
         Loaded += (_, _) => Update();
         Unloaded += (_, _) => _timer.Stop();
         IsVisibleChanged += (_, _) => Update();
-        Theme.Changed += InvalidateVisual;
+        Theme.Changed += Update;
     }
 
     public IReadOnlyList<Color> Colors { get => _colors; set { _colors = value; InvalidateVisual(); } }
@@ -42,7 +42,7 @@ public sealed class AmbientBackground : FrameworkElement
 
     private void Update()
     {
-        if (_animate && IsLoaded && IsVisible) _timer.Start(); else _timer.Stop();
+        if (_animate && !Theme.Classic && IsLoaded && IsVisible) _timer.Start(); else _timer.Stop();
         InvalidateVisual();
     }
 
@@ -51,6 +51,7 @@ public sealed class AmbientBackground : FrameworkElement
         var t = Theme.Current; var w = ActualWidth; var h = ActualHeight;
         if (w <= 0 || h <= 0) return;
         dc.DrawRectangle(new LinearGradientBrush(t.AmbientTop, t.AmbientBottom, 90), null, new Rect(0, 0, w, h));
+        if (Theme.Classic) return;
         var palette = _colors.Concat([t.Accent, Accents.FromArgb(DesignTokens.Ambient[0]), Accents.FromArgb(DesignTokens.Ambient[1])]).Distinct().Take(4).ToArray();
         var phase = _clock.Elapsed.TotalSeconds;
         for (var i = 0; i < palette.Length; i++)
@@ -334,7 +335,8 @@ public static class Ui
     public static Border Card(UIElement child, Color? tint = null, double radius = DesignTokens.Radius.Card, Thickness? padding = null, bool strong = false)
     {
         var layers = new Grid();
-        if (tint is { } c) layers.Children.Add(new Border { CornerRadius = new CornerRadius(radius - 1), Background = Palette.Frozen(Palette.Alpha(c, Theme.Current.Dark ? .10 : .07)), IsHitTestVisible = false });
+        // Classic cards stay plain, as grouped lists do; glass cards pick up a breath of the provider's colour.
+        if (tint is { } c && !Theme.Classic) layers.Children.Add(new Border { CornerRadius = new CornerRadius(radius - 1), Background = Palette.Frozen(Palette.Alpha(c, Theme.Current.Dark ? .10 : .07)), IsHitTestVisible = false });
         var sheen = new Border { CornerRadius = new CornerRadius(radius - 1), IsHitTestVisible = false };
         sheen.SetResourceReference(Border.BackgroundProperty, "Ui.Sheen");
         layers.Children.Add(sheen);
@@ -491,7 +493,9 @@ public static class Ui
     }
 
     /// <summary>Usage in "limits": under one limit as a percentage ("48%"), from one up as a multiple ("1.6×").</summary>
-    public static string Limits(double? fraction) => fraction is not { } f ? "—" : f >= .995 ? $"{f:0.#}×" : $"{Math.Round(f * 100):0}%";
+    /// <summary>Usage in limits: "64%" up to about one full limit, then "1.6×" (one and a bit limits' worth).</summary>
+    public const double MultipleFrom = 1.05;
+    public static string Limits(double? fraction) => fraction is not { } f ? "—" : f >= MultipleFrom ? $"{f:0.#}×" : $"{Math.Round(f * 100):0}%";
 
     /// <summary>A small, quiet badge for the subscription ("Max 5×", "Edu").</summary>
     public static Border PlanBadge(string plan)

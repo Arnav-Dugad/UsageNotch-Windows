@@ -11,8 +11,8 @@ public static class DesignTokens
     public const uint Live = 0xFF2EE0A8;
     public const uint Preview = 0xFF8FB6FF;
     public const uint Forecast = 0xFFBEA4F0;
-    public static readonly IReadOnlyDictionary<string, uint> Brand = new Dictionary<string, uint> { ["claude"] = 0xFFD97757, ["anthropic-api"] = 0xFFD97757, ["codex"] = 0xFF10A37F, ["openai-api"] = 0xFF10A37F, ["gemini"] = 0xFF4796E3, ["cursor"] = 0xFF9A7CFF, ["other"] = 0xFF8E8E93 };
-    public static readonly uint[] AccentChoices = [0xFFD97757, 0xFFFF6B6B, 0xFFFFB547, 0xFF34C759, 0xFF10A37F, 0xFF32ADE6, 0xFF4796E3, 0xFF7A5CFF, 0xFFBF5AF2, 0xFFFF2D92];
+    public static readonly IReadOnlyDictionary<string, uint> Brand = new Dictionary<string, uint> { ["claude"] = 0xFFD97757, ["anthropic-api"] = 0xFFD97757, ["codex"] = 0xFF10A37F, ["openai-api"] = 0xFF10A37F, ["gemini"] = 0xFF3186FF, ["cursor"] = 0xFF9A7CFF, ["other"] = 0xFF8E8E93 };
+    public static readonly uint[] AccentChoices = [0xFFD97757, 0xFFFF6B6B, 0xFFFFB547, 0xFF34C759, 0xFF10A37F, 0xFF32ADE6, 0xFF3186FF, 0xFF7A5CFF, 0xFFBF5AF2, 0xFFFF2D92];
     public static readonly uint[] Ambient = [0xFF7A5CFF, 0xFF2E9BFF];
     public static class Dark
     {
@@ -54,6 +54,8 @@ public static class DesignTokens
         public const uint GlassRim = 0xCCFFFFFF;
         public const double AmbientAlpha = 0.3;
     }
+    public static class TypeScale { public const double Display = 30.0; public const double Title = 20.0; public const double Headline = 15.0; public const double Body = 13.0; public const double Callout = 12.5; public const double Caption = 11.5; public const double Micro = 10.5; public const double Number = 26.0; }
+    public static class Spacing { public const double Xs = 4.0; public const double S = 8.0; public const double M = 12.0; public const double L = 16.0; public const double Xl = 24.0; public const double Xxl = 32.0; public const double Page = 28.0; }
     public static class Radius { public const double Card = 26.0; public const double Inner = 18.0; public const double Control = 14.0; public const double Chip = 999.0; }
     public static class Motion
     {

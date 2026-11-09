@@ -54,4 +54,26 @@ public static class UsageForecast
         }
         return new(summary, explanation, rate * 100, projected, confidence, sample.Length, coverage, variability, low, high);
     }
+
+    /// <summary>
+    /// The pace band as times: when the limit would be reached at the fastest (90th percentile) and slowest (10th) observed
+    /// pace. "likely 3:40–4:50 PM" when both come before the reset and are at least 10 minutes apart, "as early as 3:40 PM"
+    /// when only the fast one does, otherwise null. Rates are fractions of the limit per hour, as in <see cref="PaceForecast"/>.
+    /// </summary>
+    public static string? RangeText(PaceForecast? f, double used, DateTimeOffset reset, DateTimeOffset now, bool use24)
+    {
+        if (f?.HighRate is not { } high || high <= .000001 || used >= 1) return null;
+        var early = now.AddHours((1 - used) / high);
+        if (early >= reset) return null;
+        DateTimeOffset? late = f.LowRate is { } low && low > .000001 ? now.AddHours((1 - used) / low) : null;
+        if (late is { } l && l < reset)
+        {
+            if (l - early < TimeSpan.FromMinutes(10)) return null;
+            // "3:40–4:50 PM": the first time drops its AM/PM when both share it.
+            var first = TimeDisplay.Clock(early, use24);
+            if (!use24 && early.ToLocalTime().Hour / 12 == l.ToLocalTime().Hour / 12 && early.ToLocalTime().Date == l.ToLocalTime().Date) first = first[..first.LastIndexOf(' ')];
+            return $"likely {first}–{TimeDisplay.Clock(l, use24)}";
+        }
+        return $"as early as {TimeDisplay.Clock(early, use24)}";
+    }
 }

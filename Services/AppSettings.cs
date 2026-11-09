@@ -5,6 +5,8 @@ namespace UsageNotch.Services;
 public sealed class AppSettings
 {
     public bool AutomaticUpdates { get; set; } = true;
+    /// <summary>The version whose welcome or "What's new" sheet was last shown ("2.8").</summary>
+    public string LastSeenVersion { get; set; } = "";
     [System.Text.Json.Serialization.JsonIgnore]
     public bool ReviewSession { get; set; }
     [System.Text.Json.Serialization.JsonIgnore]
@@ -27,6 +29,8 @@ public sealed class AppSettings
     public bool ShowRemaining { get; set; }
     public bool ShowAccountNames { get; set; } = true;
     public bool SleekMode { get; set; } = true;
+    /// <summary>Classic style: solid grouped cards with no ambient light or glass, as on Android.</summary>
+    public bool ClassicStyle { get; set; }
     public bool ShowProviderNames { get; set; }
     public bool ShowDockResetTimes { get; set; }
     public bool ShowExpandedResetTimes { get; set; } = true;
@@ -50,6 +54,8 @@ public sealed class AppSettings
     // Behaviour
     public bool AlwaysVisible { get; set; } = true;
     public bool ShowTrayIcon { get; set; } = true;
+    /// <summary>The tray icon shows your first provider's usage as a ring, with every provider in its tooltip.</summary>
+    public bool LiveTrayIcon { get; set; } = true;
     public bool ReducedMotion { get; set; }
     public int HoverDelayMs { get; set; } = 70;
     public int PollSeconds { get; set; } = 60;

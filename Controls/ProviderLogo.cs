@@ -34,24 +34,50 @@ public sealed class ProviderLogo : FrameworkElement
         });
     }
 
-    protected override void OnRender(DrawingContext context)
+    /// <summary>Gemini's 2025 spark: a blue base with green, red and yellow light falling off from three sides (Lobe Icons).</summary>
+    private static readonly Brush[] GeminiLayers = CreateGeminiLayers();
+    private static readonly Brush ClaudeCoral = Frozen(new SolidColorBrush(Color.FromRgb(0xD9, 0x77, 0x57)));
+
+    private static Brush[] CreateGeminiLayers()
     {
-        var key = UsageNotch.Services.ProviderKind.Of(Provider ?? "") switch { "codex" or "openai_api" => "openai", "gemini" => "googlegemini", "anthropic_api" => "claude", var kind => kind };
-        if (!Logos.TryGetValue(key, out var geometry)) return;
-        Brush brush = Foreground;
-        if (Colored)
+        Brush Fade(Color c, Point from, Point to, double end = 1)
         {
-            brush = key switch
-            {
-                "claude" => new SolidColorBrush(Color.FromRgb(218, 119, 86)),
-                "googlegemini" => new LinearGradientBrush(Color.FromRgb(79, 156, 255), Color.FromRgb(207, 109, 206), 45),
-                _ => Foreground
-            };
+            var brush = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = from, EndPoint = to };
+            brush.GradientStops.Add(new GradientStop(c, 0));
+            brush.GradientStops.Add(new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), end));
+            return Frozen(brush);
         }
-        var scale = Math.Min(ActualWidth, ActualHeight) / 24;
-        context.PushTransform(new TranslateTransform((ActualWidth - 24 * scale) / 2, (ActualHeight - 24 * scale) / 2));
+        return
+        [
+            Frozen(new SolidColorBrush(Color.FromRgb(0x31, 0x86, 0xFF))),
+            Fade(Color.FromRgb(0x08, 0xB9, 0x62), new Point(7, 15.5), new Point(11, 12)),
+            Fade(Color.FromRgb(0xF9, 0x45, 0x43), new Point(8, 5.5), new Point(11.5, 11)),
+            Fade(Color.FromRgb(0xFA, 0xBC, 0x12), new Point(3.5, 13.5), new Point(17.5, 12), .46)
+        ];
+    }
+
+    private static Brush Frozen(Brush brush) { brush.Freeze(); return brush; }
+
+    /// <summary>The artwork key for a provider id: Codex has its own mark; the OpenAI API keeps OpenAI's.</summary>
+    internal static string KeyFor(string provider) => UsageNotch.Services.ProviderKind.Of(provider ?? "") switch
+    {
+        "openai_api" => "openai", "gemini" => "googlegemini", "anthropic_api" => "claude", var kind => kind
+    };
+
+    protected override void OnRender(DrawingContext context) => Draw(context, Provider, new Rect(0, 0, ActualWidth, ActualHeight), Foreground, Colored);
+
+    /// <summary>Draws a provider's mark centred in a square inside <paramref name="bounds"/>; used by the dock and by images.</summary>
+    public static void Draw(DrawingContext context, string provider, Rect bounds, Brush ink, bool colored)
+    {
+        var key = KeyFor(provider);
+        if (!Logos.TryGetValue(key, out var geometry)) return;
+        var scale = Math.Min(bounds.Width, bounds.Height) / 24;
+        context.PushTransform(new TranslateTransform(bounds.X + (bounds.Width - 24 * scale) / 2, bounds.Y + (bounds.Height - 24 * scale) / 2));
         context.PushTransform(new ScaleTransform(scale, scale));
-        context.DrawGeometry(brush, null, geometry);
+        if (colored && key == "googlegemini")
+            foreach (var layer in GeminiLayers) context.DrawGeometry(layer, null, geometry);
+        else
+            context.DrawGeometry(colored && key == "claude" ? ClaudeCoral : ink, null, geometry);
         context.Pop();
         context.Pop();
     }

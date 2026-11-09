@@ -50,6 +50,7 @@ public partial class SettingsWindow : Window
         GeminiCloudBox.IsChecked = settings.GeminiUseCloudProject;
 
         TrayBox.IsChecked = settings.ShowTrayIcon;
+        LiveTrayBox.IsChecked = settings.LiveTrayIcon;
         AlwaysVisibleBox.IsChecked = settings.AlwaysVisible;
         ClickThroughBox.IsChecked = settings.ClickThrough;
         StartupBox.IsChecked = settings.StartWithWindows || StartupService.IsEnabled();
@@ -157,9 +158,9 @@ public partial class SettingsWindow : Window
     private void ApplyLive()
     {
         if (_suspend) return;
-        var theme = _settings.AppTheme; var comet = _settings.CometRings;
+        var theme = _settings.AppTheme; var comet = _settings.CometRings; var classic = _settings.ClassicStyle;
         Collect();
-        if (theme != _settings.AppTheme || comet != _settings.CometRings) ApplyTheme();
+        if (theme != _settings.AppTheme || comet != _settings.CometRings || classic != _settings.ClassicStyle) ApplyTheme();
         UpdatePreview();
         SettingsChanged?.Invoke();
     }
@@ -177,6 +178,7 @@ public partial class SettingsWindow : Window
         _settings.GeminiUseCloudProject = GeminiCloudBox.IsChecked == true;
 
         _settings.ShowTrayIcon = TrayBox.IsChecked == true;
+        _settings.LiveTrayIcon = LiveTrayBox.IsChecked == true;
         _settings.AlwaysVisible = AlwaysVisibleBox.IsChecked == true;
         _settings.ClickThrough = ClickThroughBox.IsChecked == true;
         _settings.StartWithWindows = StartupBox.IsChecked == true;
@@ -205,6 +207,7 @@ public partial class SettingsWindow : Window
         _settings.ShareProjectsWithPhone = ShareProjectsBox.IsChecked == true;
         _settings.ShowIncidents = IncidentsBox.IsChecked == true;
         _settings.AppTheme = ThemeLight.IsChecked == true ? "Light" : ThemeDark.IsChecked == true ? "Dark" : "System";
+        _settings.ClassicStyle = StyleClassic.IsChecked == true;
         _settings.CometRings = CometBox.IsChecked == true;
         _settings.AlertWarnPercent = (int)WarnSlider.Value;
         _settings.AlertCriticalPercent = (int)Math.Max(CriticalSlider.Value, WarnSlider.Value);
@@ -429,6 +432,8 @@ public partial class SettingsWindow : Window
         ThemeSystem.IsChecked = settings.AppTheme is not ("Light" or "Dark");
         ThemeLight.IsChecked = settings.AppTheme == "Light";
         ThemeDark.IsChecked = settings.AppTheme == "Dark";
+        StyleGlass.IsChecked = !settings.ClassicStyle;
+        StyleClassic.IsChecked = settings.ClassicStyle;
         CometBox.IsChecked = settings.CometRings;
     }
 

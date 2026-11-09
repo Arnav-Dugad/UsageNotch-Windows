@@ -1,9 +1,9 @@
 Provider logo notices
 
-OpenAI, Claude and Google Gemini vector paths: Simple Icons v14 (CC0).
+OpenAI and Claude vector paths: Simple Icons v14 (CC0).
 Source: https://cdn.jsdelivr.net/npm/simple-icons@14/icons/
-Cursor vector path: Lobe Icons.
-Source: https://github.com/lobehub/lobe-icons/blob/master/packages/static-svg/icons/cursor.svg
+Gemini (2025 colours), Codex and Cursor vector paths: Lobe Icons.
+Source: https://github.com/lobehub/lobe-icons/tree/master/packages/static-svg/icons (gemini-color.svg, codex.svg, cursor.svg)
 
 Brand marks remain the property of their respective owners. UsageNotch is independent and is not endorsed by these providers.
 

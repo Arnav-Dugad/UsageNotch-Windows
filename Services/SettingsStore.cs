@@ -7,6 +7,9 @@ public static class SettingsStore
     private static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UsageNotch");
     private static string FilePath => Path.Combine(Dir, "settings.json");
 
+    /// <summary>Whether settings were ever saved on this PC; false on the very first launch.</summary>
+    public static bool Exists() { try { return File.Exists(FilePath); } catch { return true; } }
+
     public static AppSettings Load()
     {
         try

@@ -8,8 +8,9 @@ using HorizontalAlignment = System.Windows.HorizontalAlignment;
 namespace UsageNotch.Controls;
 
 /// <summary>
-/// History, as on Android: pick a provider and limit, then 7 or 30 days of daily usage with bars that grow in (click one to
-/// open that day), totals, a 90-day calendar, your providers side by side, your busiest hours, insights and local tokens.
+/// History, as on Android: "This week" in plain language, then pick a provider and limit for 7, 30 or 90 days of daily usage
+/// with bars that grow in (click one to open that day), totals, a 90-day calendar, all-time totals, your providers side by
+/// side, your busiest hours, insights and local tokens.
 /// Days and hours without readings are shown as no data, never as zero.
 /// </summary>
 public sealed class HistoryView : Grid
@@ -28,7 +29,7 @@ public sealed class HistoryView : Grid
     public HistoryView()
     {
         _page.Children.Add(Ui.Text("History", 30, FontWeights.SemiBold, "Ui.Text", false));
-        var subtitle = Ui.Text("What you used, day by day, from the readings this PC keeps.", 13, FontWeights.Normal, "Ui.Muted"); subtitle.Margin = new Thickness(0, 4, 0, 16);
+        var subtitle = Ui.Text("What you used, day by day, from the readings this PC keeps until you delete them.", 13, FontWeights.Normal, "Ui.Muted"); subtitle.Margin = new Thickness(0, 4, 0, 16);
         _page.Children.Add(subtitle);
         _page.Children.Add(_providerChips);
         _page.Children.Add(_windowChips);
@@ -72,24 +73,27 @@ public sealed class HistoryView : Grid
             var others = items.Where(p => p.SessionWindow is not null).Select(p => (p, _coordinator.SummaryFor(p.Snapshot, p.SessionWindow!))).ToList();
             var otherWindows = provider.Windows.Where(w => w.UsedFraction is not null && w.Id != window.Id).Select(w => (w, _coordinator.SummaryFor(provider.Snapshot, w))).ToList();
             var tokens = _coordinator.TokenReports();
-            return (summary, others, otherWindows, tokens);
+            var report = _coordinator.WeekReportFor();
+            var allTime = _coordinator.AllTimeFor(provider.Snapshot, window);
+            return (summary, others, otherWindows, tokens, report, allTime);
         });
         if (generation != _generation) return;
         _body.Children.Clear();
         var index = 0;
         void Add(UIElement e) { _body.Children.Add(e); Motion.Rise(e, index++, Reduced); }
+        if (data.report is { } week) Add(ReportView.Card(week, items, s, Reduced, Share));
         if (data.summary is not { } sum)
         {
             Add(Ui.Card(Ui.Stack(Ui.Text("No history yet", 20, FontWeights.Light), Ui.Text("UsageNotch records readings while it runs. Daily totals appear after a few readings.", 12.5, FontWeights.Normal, "Ui.Muted"))));
         }
         else
         {
-            var days = sum.Days.TakeLast(_days).ToList();
+            var days = sum.Calendar.TakeLast(_days).ToList();
             // Plain language: one full limit is 100%; more than that is shown as a multiple (1.6× = one and a bit limits' worth).
             var tiles = new UniformGrid2(4);
             var total = sum.Total(_days); var recorded = sum.Recorded(_days); var busiest = sum.Busiest(_days);
-            var limitName = window.Label.ToLowerInvariant();
-            tiles.Add(Tile($"Used in {_days} days", Ui.Limits(total), total is >= .995 ? $"{total:0.#} full {limitName} limits' worth" : $"of one {limitName} limit"));
+            var limitName = WeeklyReport.Lower(window.Label);
+            tiles.Add(Tile($"Used in {_days} days", Ui.Limits(total), total is >= Ui.MultipleFrom ? $"{total:0.#} full {limitName} limits' worth" : $"of one {limitName} limit"));
             tiles.Add(Tile("On an average day", total is { } t && recorded > 0 ? Ui.Limits(t / recorded) : "—", recorded > 0 ? $"of the limit, over {recorded} day{(recorded == 1 ? "" : "s")} with readings" : "no readings yet"));
             tiles.Add(Tile("Busiest day", busiest is { } b ? b.Date.ToString("ddd, MMM d") : "—", busiest is { Used: { } bu } ? $"{Ui.Limits(bu)} of the limit" : "no usage recorded"));
             tiles.Add(Tile("Streak", sum.Streak > 0 ? $"{sum.Streak} day{(sum.Streak == 1 ? "" : "s")}" : "—", "in a row with usage"));
@@ -109,8 +113,9 @@ public sealed class HistoryView : Grid
             var calendarDay = new Border();
             calendar.DayClicked += day => ShowDay(calendarDay, day, sum, data.otherWindows, provider, window);
             Add(Ui.Card(Ui.Stack(Title("\uE787", "90 days", "outlined days had no readings"), calendar, calendarDay), accent));
+            if (data.allTime is { } all) Add(ReportView.AllTime(all, window, accent));
 
-            var series = data.others.Where(o => o.Item2 is not null).Select(o => new CompareChart.Series(o.p.DisplayName, o.p.AccentColor, o.Item2!.Days.TakeLast(_days).ToArray())).ToList();
+            var series = data.others.Where(o => o.Item2 is not null).Select(o => new CompareChart.Series(o.p.DisplayName, o.p.AccentColor, o.Item2!.Calendar.TakeLast(_days).ToArray())).ToList();
             if (series.Count > 1)
             {
                 var chart = new CompareChart { Reduced = Reduced, Data = series };
@@ -137,9 +142,36 @@ public sealed class HistoryView : Grid
 
     private GlassTabBar MakeRange()
     {
-        var bar = new GlassTabBar(["7 days", "30 days"], _days == 7 ? 0 : 1, 32, 12) { Reduced = Reduced, Margin = new Thickness(4, 0, 0, 8), VerticalAlignment = VerticalAlignment.Top };
-        bar.SelectionChanged += i => { _days = i == 0 ? 7 : 30; _openDay = null; Refresh(); };
+        var bar = new GlassTabBar(["7 days", "30 days", "90 days"], _days switch { 7 => 0, 30 => 1, _ => 2 }, 32, 12) { Reduced = Reduced, Margin = new Thickness(4, 0, 0, 8), VerticalAlignment = VerticalAlignment.Top };
+        bar.SelectionChanged += i => { _days = i switch { 0 => 7, 1 => 30, _ => 90 }; _openDay = null; Refresh(); };
         return bar;
+    }
+
+    /// <summary>Renders "My week in AI", saves it to Pictures and copies it, then says where it went.</summary>
+    private async void Share(TextBlock status)
+    {
+        if (_coordinator is null) return;
+        status.Text = "Making your image…";
+        var coordinator = _coordinator; var items = coordinator.ItemsSnapshot;
+        var (summaries, report, tokens) = await Task.Run(() =>
+        {
+            var map = new Dictionary<(string, string), WindowSummary?>();
+            foreach (var p in items)
+                foreach (var w in new[] { p.SessionWindow, p.WeeklyWindow }.Where(w => w is not null)) map[(p.Id, w!.Id)] = coordinator.SummaryFor(p.Snapshot, w!);
+            return (map, coordinator.WeekReportFor(), coordinator.TokenReports());
+        });
+        try
+        {
+            var image = ShareWeekCard.Render(items, (p, w) => summaries.GetValueOrDefault((p.Id, w.Id)), report, tokens, coordinator.Settings, Theme.Current.Dark, coordinator.Settings.ClassicStyle);
+            var (file, message) = ShareWeekCard.SaveAndCopy(image);
+            status.Text = message;
+            if (file is not null)
+            {
+                status.Cursor = System.Windows.Input.Cursors.Hand; status.TextDecorations = TextDecorations.Underline; status.ToolTip = "Show in folder";
+                status.MouseLeftButtonUp += (_, _) => { try { System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{file}\""); } catch { } };
+            }
+        }
+        catch (Exception e) { status.Text = "Couldn't make the image: " + e.Message; }
     }
 
     private static Grid Tile(string label, string value, string detail)

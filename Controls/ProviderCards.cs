@@ -119,8 +119,11 @@ public static class ProviderVisuals
     {
         if (f?.PercentPerHour is not { } rate || w.UsedFraction is not { } used || w.ResetsAt is not { } reset) return f?.Summary.StartsWith("Learning") == true ? "Learning your pace…" : null;
         if (rate <= .0001) return "At this pace: no increase since the last readings";
-        var eta = DateTimeOffset.Now.AddHours((1 - used) * 100 / rate);
-        return eta < reset ? $"At this pace: limit around {TimeDisplay.Clock(eta, s.Use24HourTime)}" : $"At this pace: about {Math.Min(100, f.ProjectedPercent ?? 0):0}% by the reset";
+        var now = DateTimeOffset.Now;
+        var eta = now.AddHours((1 - used) * 100 / rate);
+        if (eta >= reset) return $"At this pace: about {Math.Min(100, f.ProjectedPercent ?? 0):0}% by the reset";
+        var range = UsageForecast.RangeText(f, used, reset, now, s.Use24HourTime);
+        return $"At this pace: limit around {TimeDisplay.Clock(eta, s.Use24HourTime)}" + (range is null ? "" : $" ({range})");
     }
 
     /// <summary>A banner for an open incident on the provider's status page.</summary>

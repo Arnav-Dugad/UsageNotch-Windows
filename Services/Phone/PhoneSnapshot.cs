@@ -29,7 +29,14 @@ public static class PhoneSnapshot
     /// Consumption is the sum of increases between continuous readings; gaps and resets add nothing and are never guessed.
     /// </summary>
     public sealed record History(string Window, string Label, List<Day> Days, List<double> Heat, List<int> Observed, int Streak, List<Day>? Calendar = null,
-        List<Point>? Trend = null, List<Unused>? Unused = null, List<Hit>? Hits = null, Reliability? Reliability = null, List<Event>? Events = null, List<Session>? Sessions = null);
+        List<Point>? Trend = null, List<Unused>? Unused = null, List<Hit>? Hits = null, Reliability? Reliability = null, List<Event>? Events = null, List<Session>? Sessions = null,
+        AllTime? AllTime = null);
+    /// <summary>Everything this PC has recorded for a window (feature "alltime"). Used is in limits: 2.5 = two and a half full limits.</summary>
+    public sealed record AllTime(long Since, double Used, int ActiveDays, int RecordedDays, int Hits, string? BestDay, double BestUsed);
+    /// <summary>"This week" (feature "report"): the last 7 local days against the 7 before, with sentences written on the PC.</summary>
+    public sealed record ReportInfo(string From, string To, long GeneratedAt, string Headline, string Summary, List<ReportRow> Providers, List<ReportLine> Insights);
+    public sealed record ReportRow(string Id, string Name, string Window, string Label, double? Used, double? Previous, double? Change, int ActiveDays, int Hits, string? BusiestDay, double? BusiestUsed, int Streak);
+    public sealed record ReportLine(string Kind, string? Provider, string Text);
     // Protocol 2 insights (docs/PHONE-PROTOCOL.md). Older phones ignore them.
     public sealed record Unused(long End, double Peak);
     public sealed record Hit(long At, long? Reset);
@@ -50,20 +57,23 @@ public static class PhoneSnapshot
         bool? AllDevices = null, long? Lifetime = null, long? PeakDaily = null, int? LongestStreak = null);
     public sealed record TokenInfo(long UpdatedAt, List<TokenSource> Sources);
     /// <summary>What a snapshot carries beyond the dock: protocol 2's heavier fields, local tokens and status-page incidents.</summary>
-    public sealed record Extras(bool Detailed, IReadOnlyList<TokenReport> Tokens, IReadOnlyList<Services.Incident> Incidents, bool ShareProjects, int TrendPoints = 400)
+    public sealed record Extras(bool Detailed, IReadOnlyList<TokenReport> Tokens, IReadOnlyList<Services.Incident> Incidents, bool ShareProjects, int TrendPoints = 400,
+        WeekReport? Report = null, Func<ProviderSnapshot, LimitWindow, AllTimeTotals?>? AllTime = null)
     {
         public static readonly Extras None = new(false, [], [], false);
     }
-    public static readonly string[] Features = ["refresh", "settings", "trend", "insights", "tokens", "incidents", "accounts"];
+    public static readonly string[] Features = ["refresh", "settings", "trend", "insights", "tokens", "incidents", "accounts", "report", "alltime"];
     /// <summary>Internet sync details for a paired phone. Only ever sent over the pinned, authenticated local link.</summary>
     public sealed record RelayInfo(string Url, string Key);
     public sealed record Snapshot(int Schema, long GeneratedAt, List<Provider> Providers, string? Source = null, string? AppVersion = null,
         RelayInfo? Relay = null, string? RelayState = null, int? Protocol = null, string[]? Features = null,
-        System.Text.Json.Nodes.JsonObject? Shared = null, List<IncidentInfo>? Incidents = null, TokenInfo? Tokens = null);
+        System.Text.Json.Nodes.JsonObject? Shared = null, List<IncidentInfo>? Incidents = null, TokenInfo? Tokens = null, ReportInfo? Report = null);
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
     public const int MaxProviders = 16, MaxWindows = 32, MaxPoints = 512, HistoryDays = 30, CalendarDays = 90;
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTimeOffset At, History Value)> HistoryCache = new();
+    /// <summary>Forgets cached summaries, after history is deleted.</summary>
+    public static void ClearCache() => HistoryCache.Clear();
 
     /// <summary>Builds from the running app's latest provider readings, with 24 hours of recorded history per window and, when asked, 30-day summaries.</summary>
     public static Snapshot FromLive(IReadOnlyList<ProviderSnapshot> live, AppSettings settings, UsageHistory history, string? database, int maxPoints = MaxPoints, bool summaries = true, Extras? extras = null)
@@ -101,7 +111,7 @@ public static class PhoneSnapshot
             var weekly = view.WeeklyWindow is { UsedFraction: not null } wk && wk.Id != session?.Id ? wk : null;
             List<History>? summary = null;
             if (summaries)
-                summary = new[] { session, weekly }.Where(x => x != null).Select(x => HistoryFor(history, snapshot.Id, account, x!, now, extras)).Where(h => h != null).Select(h => h!).ToList();
+                summary = new[] { session, weekly }.Where(x => x != null).Select(x => HistoryFor(history, snapshot, account, x!, now, extras)).Where(h => h != null).Select(h => h!).ToList();
             providers.Add(new Provider(snapshot.Id, snapshot.DisplayName, snapshot.Status.ToString(), windows,
                 string.IsNullOrWhiteSpace(snapshot.StatusText) ? null : snapshot.StatusText,
                 settings.ShowAccountNames && !string.IsNullOrWhiteSpace(snapshot.AccountName) ? snapshot.AccountName : null,
@@ -113,8 +123,15 @@ public static class PhoneSnapshot
         return new Snapshot(1, now.ToUnixTimeMilliseconds(), providers, "windows-app", AppVersion(), Protocol: 2, Features: Features,
             Shared: SharedSettings.ToJson(settings),
             Incidents: extras.Incidents.Count == 0 ? null : extras.Incidents.Take(8).Select(i => new IncidentInfo(i.Provider, i.Title, i.Impact, i.Status, i.Url, i.UpdatedAt.ToUnixTimeMilliseconds())).ToList(),
-            Tokens: extras.Tokens.Count == 0 ? null : new TokenInfo(now.ToUnixTimeMilliseconds(), extras.Tokens.Select(r => TokensFor(r, extras.ShareProjects)).ToList()));
+            Tokens: extras.Tokens.Count == 0 ? null : new TokenInfo(now.ToUnixTimeMilliseconds(), extras.Tokens.Select(r => TokensFor(r, extras.ShareProjects)).ToList()),
+            Report: extras.Report is { } report ? ReportFor(report, now) : null);
     }
+
+    private static string Date(DateTime d) => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+    public static ReportInfo ReportFor(WeekReport r, DateTimeOffset now) => new(Date(r.From), Date(r.To), now.ToUnixTimeMilliseconds(), r.Headline, r.Summary,
+        r.Providers.Select(p => new ReportRow(p.Id, p.Name, p.Window, p.Label, p.Used, p.Previous, p.Change, p.ActiveDays, p.Hits, p.BusiestDay is { } d ? Date(d) : null, p.BusiestUsed, p.Streak)).ToList(),
+        r.Insights.Select(i => new ReportLine(i.Kind, i.Provider, i.Text)).ToList());
 
     private static TokenSource TokensFor(TokenReport r, bool projects)
     {
@@ -141,9 +158,10 @@ public static class PhoneSnapshot
         return new Forecast(f.Summary, f.PercentPerHour, f.ProjectedPercent, limitAt, f.Confidence, f.LowRate is { } low ? Math.Round(low * 100, 3) : null, f.HighRate is { } high ? Math.Round(high * 100, 3) : null);
     }
 
-    private static History? HistoryFor(UsageHistory history, string provider, string account, LimitWindow window, DateTimeOffset now, Extras extras)
+    private static History? HistoryFor(UsageHistory history, ProviderSnapshot snapshot, string account, LimitWindow window, DateTimeOffset now, Extras extras)
     {
-        var key = provider + "|" + account + "|" + window.Id + "|" + extras.Detailed + extras.TrendPoints;
+        var provider = snapshot.Id;
+        var key = provider + "|" + account + "|" + window.Id + "|" + extras.Detailed + extras.TrendPoints + "|" + (extras.AllTime is not null);
         if (HistoryCache.TryGetValue(key, out var cached) && now - cached.At < TimeSpan.FromMinutes(2)) return cached.Value with { Label = window.Label };
         IReadOnlyList<UsagePoint> points; IReadOnlyList<UsageEvent> events;
         lock (history)
@@ -157,6 +175,8 @@ public static class PhoneSnapshot
             Unused: summary.Unused.Select(u => new Unused(u.End.ToUnixTimeMilliseconds(), Math.Round(u.Peak, 4))).ToList(),
             Hits: summary.Hits.Select(h => new Hit(h.At.ToUnixTimeMilliseconds(), h.Reset?.ToUnixTimeMilliseconds())).ToList(),
             Reliability: new Reliability(summary.Reliability.Periods, summary.Reliability.Fixed, summary.Reliability.Moved, summary.Reliability.AverageShiftMinutes, summary.Reliability.Confirmed, summary.Reliability.Changed));
+        if (extras.AllTime?.Invoke(snapshot, window) is { } all)
+            value = value with { AllTime = new AllTime(all.Since.ToUnixTimeMilliseconds(), all.Used, all.ActiveDays, all.RecordedDays, all.Hits, all.BestDay is { } best ? Date(best) : null, all.BestUsed) };
         if (extras.Detailed)
         {
             var week = points.Where(p => p.At >= now.AddDays(-7)).ToList();

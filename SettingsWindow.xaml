@@ -477,7 +477,7 @@
                             <TabItem Header="Appearance" Style="{StaticResource NavTab}">
                                 <ScrollViewer Style="{StaticResource PageScroll}"><StackPanel MaxWidth="860" HorizontalAlignment="Left" Margin="6,0,0,0">
                                     <TextBlock Text="Look and feel" Style="{StaticResource PageTitle}"/>
-                                    <TextBlock Text="The workspace, the dock and your phone share one design: liquid glass over soft coloured light." Style="{StaticResource SecondaryText}" Margin="0,0,0,16"/>
+                                    <TextBlock Text="The workspace, the dock and your phone share one design: liquid glass over soft coloured light, or Classic." Style="{StaticResource SecondaryText}" Margin="0,0,0,16"/>
                                     <TextBlock Text="WORKSPACE" Style="{StaticResource GroupLabel}"/>
                                     <Border Style="{StaticResource Card}"><StackPanel>
                                         <TextBlock Text="Theme" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
@@ -486,7 +486,13 @@
                                             <RadioButton x:Name="ThemeLight" Content="Light" GroupName="Theme" Style="{StaticResource Segment}"/>
                                             <RadioButton x:Name="ThemeDark" Content="Dark" GroupName="Theme" Style="{StaticResource Segment}"/>
                                         </StackPanel></Border>
-                                        <TextBlock Text="System follows Windows' app mode. The dock keeps its own colour below." Style="{StaticResource SecondaryText}" Margin="0,10,0,8"/>
+                                        <TextBlock Text="System follows Windows' app mode. The dock keeps its own colour below." Style="{StaticResource SecondaryText}" Margin="0,10,0,14"/>
+                                        <TextBlock Text="Style" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                                        <Border Style="{StaticResource SegmentHost}" HorizontalAlignment="Left"><StackPanel Orientation="Horizontal">
+                                            <RadioButton x:Name="StyleGlass" Content="Liquid glass" GroupName="UiStyle" Style="{StaticResource Segment}"/>
+                                            <RadioButton x:Name="StyleClassic" Content="Classic" GroupName="UiStyle" Style="{StaticResource Segment}"/>
+                                        </StackPanel></Border>
+                                        <TextBlock Text="Liquid glass floats translucent cards over soft coloured light. Classic uses solid, grouped cards on a plain background, like your phone's Classic style." Style="{StaticResource SecondaryText}" Margin="0,10,0,8"/>
                                         <CheckBox x:Name="CometBox" Content="Comet-trail rings with time-left hairlines" Style="{StaticResource Toggle}"/>
                                         <TextBlock Text="Arcs brighten from a faint tail to their head, as on your phone. Off draws flat arcs." Style="{StaticResource SecondaryText}"/>
                                     </StackPanel></Border>
@@ -548,6 +554,8 @@
                                     <Border Style="{StaticResource Card}"><StackPanel>
                                         <CheckBox x:Name="AlwaysVisibleBox" Content="Keep above other windows" Style="{StaticResource Toggle}" />
                                         <CheckBox x:Name="TrayBox" Content="Show system tray icon" Style="{StaticResource Toggle}" />
+                                        <CheckBox x:Name="LiveTrayBox" Content="Live usage ring in the tray icon" Style="{StaticResource Toggle}" />
+                                        <TextBlock Text="The tray icon becomes a small ring showing your first provider's usage. Hover it to see every provider." Style="{StaticResource SecondaryText}" Margin="0,0,0,8"/>
                                         <CheckBox x:Name="StartupBox" Content="Start UsageNotch when I sign in" Style="{StaticResource Toggle}" />
                                         <CheckBox x:Name="ClickThroughBox" Content="Click through the dock (ignore the mouse entirely)" Style="{StaticResource Toggle}" />
                                         <TextBlock Text="With click-through on, the dock becomes purely decorative. Turn it back off from the tray icon." Style="{StaticResource SecondaryText}" Margin="0,2,0,0"/>
@@ -821,7 +829,8 @@
                                         <ProgressBar x:Name="UpdateProgress" Height="5" Maximum="100" Margin="0,0,0,12" Visibility="Collapsed"/>
                                         <WrapPanel>
                                             <Button Content="Check now" Style="{StaticResource SecondaryButton}" Click="CheckUpdates_Click" Margin="0,0,8,8"/>
-                                            <Button x:Name="RestartUpdateButton" Content="Restart to update" Style="{StaticResource PrimaryButton}" Click="RestartUpdate_Click" IsEnabled="False" Margin="0,0,0,8"/>
+                                            <Button x:Name="RestartUpdateButton" Content="Restart to update" Style="{StaticResource PrimaryButton}" Click="RestartUpdate_Click" IsEnabled="False" Margin="0,0,8,8"/>
+                                            <Button Content="What's new" Style="{StaticResource SecondaryButton}" Click="WhatsNew_Click" Margin="0,0,0,8"/>
                                         </WrapPanel>
                                     </StackPanel></Border>
                                     <TextBlock Text="Release metadata is signed. Downloads must match the signed SHA-256 hash. Older versions are rejected. The previous app is kept as a backup; your settings and usage history stay in place." Style="{StaticResource SecondaryText}" Margin="6,0,0,0"/>

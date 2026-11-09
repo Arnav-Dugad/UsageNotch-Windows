@@ -35,11 +35,11 @@ public sealed class StatusPages
         if (!settings.ShowIncidents) { lock (_health) _health.Clear(); return; }
         if (!force && DateTimeOffset.UtcNow - _checked < TimeSpan.FromMinutes(5)) return;
         _checked = DateTimeOffset.UtcNow;
-        var pages = providerIds.Select(PageFor).Where(p => p is not null).Distinct().ToArray();
-        var results = await Task.WhenAll(pages.Select(async page => (page!, await Fetch(page!))));
+        var pages = providerIds.Select(PageFor).OfType<string>().Distinct().ToArray();
+        var results = await Task.WhenAll(pages.Select(async page => (page, await Fetch(page))));
         lock (_health)
         {
-            foreach (var key in _health.Keys.Except(pages!).ToArray()) _health.Remove(key);
+            foreach (var key in _health.Keys.Except(pages).ToArray()) _health.Remove(key);
             foreach (var (page, health) in results) if (health is not null) _health[page] = health;
         }
         Changed?.Invoke();

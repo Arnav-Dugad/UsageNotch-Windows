@@ -20,6 +20,8 @@ Feature names in Windows 2.6:
 | `tokens` | `tokens` at the root |
 | `incidents` | `incidents` at the root |
 | `accounts` | provider ids may carry an account suffix (`claude:work`); `kind` and `accountLabel` are set |
+| `report` | `report` at the root: "This week" (Windows 2.8) |
+| `alltime` | `allTime` in `history[]`: everything recorded for that window (Windows 2.8) |
 
 ## Endpoints
 
@@ -75,6 +77,27 @@ All requests are rate-limited together (30 a minute). Query strings are rejected
   - `history[].days[].coverage` and `calendar[].coverage`: 0..1 of that local day this PC observed. Daily `used` now includes usage that happened while the PC was off or asleep (counted on the day it was next read) and usage since a renewal, so totals are complete; coverage says how much of the day's timing is known.
   - `tokens.sources[].allDevices: true` marks totals that come from the provider for the whole account (Codex), not just this PC's transcripts, with optional `lifetime`, `peakDaily` and `longestStreak`. Costs are null there.
   - Codex Edu, Business and Enterprise seats report a `<limitId>-monthly` window ("Monthly limit") with `usedAmount`/`limitAmount` in `credits`. A `<limitId>-credits` extra holds a bought credit balance, and `codex-reset-credits` an available free limit reset.
+- Windows 2.8 adds two features, both optional and ignored by older phones:
+  - `report`: a root `report` object, "This week". The last 7 local days, ending today, against the 7 days before. Sentences are written on the PC so both apps say exactly the same thing.
+
+    ```jsonc
+    "report": {
+      "from": "2026-11-03", "to": "2026-11-09", "generatedAt": 1730000000000,
+      "headline": "A busier week than the last",          // or "A quieter week than the last", "A steady week", "Your week", "Your first week of history"
+      "summary": "Nov 3 – Nov 9 · 6 active days",
+      "providers": [ { "id": "claude", "name": "Claude", "window": "five_hour", "label": "Current session",
+          "used": 4.2, "previous": 3.1,                     // in limits: 4.2 = four full limits and a fifth; null without readings
+          "change": 0.35,                                   // (used - previous) / previous; null unless both weeks have 3+ days with readings and previous ≥ 0.05
+          "activeDays": 6, "hits": 2, "busiestDay": "2026-11-04", "busiestUsed": 1.3, "streak": 12 } ],
+      "insights": [ { "kind": "change", "provider": "claude", "text": "You used Claude 35% more than the week before." } ]   // at most 7, in this order: change, hits, busiest, hours, unused, streak, tokens
+    }
+    ```
+
+    Project names appear in `insights[].text` only when the PC shares project names with phones.
+  - `alltime`: `history[].allTime` is everything this PC has recorded for that window, with no time limit: `{ "since": 1700000000000, "used": 37.4, "activeDays": 120, "recordedDays": 131, "hits": 14, "bestDay": "2026-10-02", "bestUsed": 3.2 }`. `used` and `bestUsed` are in limits, counted the same way as the daily totals. `hits` counts limit periods that reached 99.5%.
+- From 2.8, `unused`, `hits` and `reliability` count real limit periods: a period ends only when the limit renews (its reset passed and a later one was reported, or usage fell by more than 10 points). Earlier versions split a period at sampling gaps and 1-minute reset drifts. The `period` field on readings still marks continuous observation segments, for pace estimates.
+- Phones keep their own permanent copy (Android 1.8): every snapshot's `calendar` days are saved on the phone and kept until you delete them, so History keeps working past 90 days and while the PC is off.
+- Forecast ranges: phones show the pace band as a time range. With `limitAt` set and `highRate` > 0, the earliest likely time is `now + (1 - used) / (highRate / 100)` hours, and the latest is the same with `lowRate`. Show "limit around 4:10 PM (likely 3:40–4:50 PM)" when both come before the reset and are at least 10 minutes apart, "(as early as 3:40 PM)" when only the early one does, and nothing extra otherwise.
 - `windows[].forecast` gains `lowRate` and `highRate`: the 10th and 90th percentile observed paces in percentage points per hour, which phones draw as the pace band.
 - `unused[].peak` is the highest reading in a finished limit period, so unused capacity is `1 - peak`.
 - `reliability.fixed` counts periods whose reported reset time never moved by more than 2 minutes. `moved` counts the others. `confirmed` and `changed` count "Confirmed reset" and "Window changed" events in the last 30 days.

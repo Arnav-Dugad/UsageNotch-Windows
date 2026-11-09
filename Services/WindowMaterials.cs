@@ -8,6 +8,13 @@ namespace UsageNotch.Services;
 public static class WindowMaterials
 {
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+    /// <summary>Matches a normal window's title bar to the app theme, keeping its caption buttons.</summary>
+    public static void TitleBar(Window window, bool dark)
+    {
+        try { var handle = new WindowInteropHelper(window).Handle; var value = dark ? 1 : 0; DwmSetWindowAttribute(handle, 20, ref value, sizeof(int)); }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { }
+    }
+
     public static bool Apply(Window window, bool transient)
     {
         // Layered WPF popups keep their solid fallback; system backdrops need a normal HWND.

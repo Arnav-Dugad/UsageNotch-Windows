@@ -239,7 +239,7 @@ public sealed class ProviderDetailView : Grid
             into.Children.Add(bars);
         }
         var hits = summary.Hits.Count;
-        var hitText = hits == 0 ? "You didn't hit this limit in the last 30 days." : $"Hit the limit {hits}× in 30 days" + (summary.Hits[^1] is { Reset: { } reset } last ? $"; last time you waited {Duration(reset - last.At)} for the reset." : ".");
+        var hitText = hits == 0 ? "You didn't hit this limit in the last 30 days." : $"Hit the limit {(hits switch { 1 => "once", 2 => "twice", _ => $"{hits} times" })} in the last 30 days" + (summary.Hits[^1] is { Reset: { } reset } last ? $"; last time you waited {Duration(reset - last.At)} for the reset." : ".");
         var r = summary.Reliability;
         var reliability = r.Periods == 0 ? "Reset reliability appears after a few periods." : r.Moved == 0 ? $"The reported reset time held in all {r.Periods} recent periods." : $"The reset time held in {r.Fixed} of {r.Periods} periods; it moved {r.Moved}× by about {r.AverageShiftMinutes:0} min.";
         foreach (var (glyph, text) in new[] { ("\uE7BA", hitText), ("\uE916", reliability), ("\uE8D1", summary.Streak > 0 ? $"{summary.Streak}-day streak of using this limit." : "No current streak.") })

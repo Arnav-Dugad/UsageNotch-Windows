@@ -23,6 +23,7 @@ public partial class SettingsWindow
     }
 
     public void ShowPhoneTab() => PhoneTab.IsSelected = true;
+    public void ShowHistoryTab() => SettingsTabs.SelectedIndex = 1;
 
     private void PhoneChanged()
     {

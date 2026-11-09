@@ -166,7 +166,7 @@ public sealed class CodexSubscriptionProvider : IUsageProvider
                 _ => slot == "primary" ? "Primary limit" : "Secondary limit"
             };
             var label = string.IsNullOrWhiteSpace(limitName) || limitName.Equals("Codex", StringComparison.OrdinalIgnoreCase)
-                ? windowName : $"{limitName} Â· {windowName}";
+                ? windowName : $"{limitName} · {windowName}";
             output.Add(new LimitWindow($"{limitId}-{slot}", label,
                 usedPercent.HasValue ? Math.Clamp(usedPercent.Value / 100.0, 0, 1) : null, reset));
         }
