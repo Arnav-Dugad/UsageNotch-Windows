@@ -79,8 +79,10 @@ internal static class Program
                 var now = DateTimeOffset.UtcNow;
                 WindowSummary? Summary(ProviderViewModel p, LimitWindow w) { lock (sampleHistory) return HistoryInsights.Summarize(sampleHistory.Read(p.Id, sampleHistory.AccountKey(p.Snapshot), w.Id, now.AddDays(-91)), [], now); }
                 AllTimeTotals? AllTime(ProviderSnapshot s, LimitWindow w) { var c = new HistoryInsights.AllTimeCounter(); lock (sampleHistory) sampleHistory.ForEach(s.Id, sampleHistory.AccountKey(s), w.Id, c.Add); return c.Result(); }
-                var report = WeeklyReport.Build(live.Select(x => new ProviderViewModel(x, sampleSettings)).ToArray(), Summary, [], true, now, false);
-                return new UsageNotch.Services.Phone.PhoneSnapshot.Extras(false, [], [], true, Report: report, AllTime: AllTime);
+                var views = live.Select(x => new ProviderViewModel(x, sampleSettings)).ToArray();
+                IReadOnlyList<DayNote> notes; lock (sampleHistory) notes = sampleHistory.Notes();
+                var report = WeeklyReport.Build(views, Summary, [], true, now, false, notes);
+                return new UsageNotch.Services.Phone.PhoneSnapshot.Extras(false, [], [], true, Report: report, AllTime: AllTime, Score: UsageScore.Compute(views, Summary));
             };
             if (!link.StartAsync(loopbackOnly: true).GetAwaiter().GetResult()) { Console.WriteLine("Couldn't start: " + link.Status); return 1; }
             var code = link.EnsureIdentity().CompactCode("10.0.2.2");
