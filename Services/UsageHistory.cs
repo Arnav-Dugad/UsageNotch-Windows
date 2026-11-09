@@ -45,6 +45,9 @@ public sealed class UsageHistory
                 at INTEGER NOT NULL, kind TEXT NOT NULL, explanation TEXT NOT NULL,
                 PRIMARY KEY(provider, account, window, at, kind));
             CREATE TABLE IF NOT EXISTS provider_state (provider TEXT PRIMARY KEY, account TEXT NOT NULL, status TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS day_notes (date TEXT PRIMARY KEY, text TEXT NOT NULL, at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS plan_history (provider TEXT NOT NULL, account TEXT NOT NULL, at INTEGER NOT NULL, plan TEXT NOT NULL,
+                PRIMARY KEY(provider, account, at));
             """;
         command.ExecuteNonQuery();
         return connection;
@@ -76,6 +79,21 @@ public sealed class UsageHistory
                     if (reader.GetString(1) != snapshot.Status.ToString())
                         Event("", now, snapshot.Status == SnapshotStatus.Ok ? "Readings resumed" : "Reading unavailable",
                             snapshot.Status == SnapshotStatus.Ok ? "Successful provider readings resumed." : "The app could not obtain a current successful reading. This does not establish a provider-wide outage.");
+                }
+            }
+            // Plan history: a row whenever the plan the provider reports differs from the last one seen.
+            if (snapshot.Status == SnapshotStatus.Ok && snapshot.Plan is { Length: > 0 } plan)
+            {
+                using var last = connection.CreateCommand(); last.Transaction = transaction;
+                last.CommandText = "SELECT plan FROM plan_history WHERE provider=$p AND account=$a ORDER BY at DESC LIMIT 1";
+                last.Parameters.AddWithValue("$p", snapshot.Id); last.Parameters.AddWithValue("$a", account);
+                if (last.ExecuteScalar() is not string previousPlan || previousPlan != plan)
+                {
+                    using var add = connection.CreateCommand(); add.Transaction = transaction;
+                    add.CommandText = "INSERT OR IGNORE INTO plan_history VALUES ($p,$a,$t,$n)";
+                    add.Parameters.AddWithValue("$p", snapshot.Id); add.Parameters.AddWithValue("$a", account);
+                    add.Parameters.AddWithValue("$t", now.ToUnixTimeMilliseconds()); add.Parameters.AddWithValue("$n", plan.Length > 40 ? plan[..40] : plan);
+                    add.ExecuteNonQuery();
                 }
             }
             using (var state = connection.CreateCommand())
@@ -157,6 +175,76 @@ public sealed class UsageHistory
         return points;
     }
 
+    /// <summary>The plans this account has reported, oldest first: when UsageNotch first saw each one.</summary>
+    public IReadOnlyList<PlanChange> Plans(string provider, string account, int max = 20)
+    {
+        var list = new List<PlanChange>();
+        try
+        {
+            using var connection = Open(); using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT at, plan FROM plan_history WHERE provider=$p AND account=$a ORDER BY at";
+            cmd.Parameters.AddWithValue("$p", provider); cmd.Parameters.AddWithValue("$a", account);
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) list.Add(new PlanChange(DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(0)), r.GetString(1)));
+        }
+        catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException) { }
+        return list.TakeLast(max).ToArray();
+    }
+
+    /// <summary>Every day note, newest first, including deleted ones (empty text) so phones learn about deletions.</summary>
+    public IReadOnlyList<DayNote> Notes(int max = 500)
+    {
+        var list = new List<DayNote>();
+        try
+        {
+            using var connection = Open(); using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT date, text, at FROM day_notes ORDER BY date DESC LIMIT $n";
+            cmd.Parameters.AddWithValue("$n", max);
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                if (DateTime.TryParseExact(r.GetString(0), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date))
+                    list.Add(new DayNote(date, r.GetString(1), r.GetInt64(2)));
+        }
+        catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException) { }
+        return list;
+    }
+
+    /// <summary>
+    /// Merges notes by time: a note replaces ours only when it's newer (a tie keeps ours). Empty text deletes. Dates must be
+    /// real days from 2020 to tomorrow, and times no later than a day from now. Returns true when anything changed.
+    /// </summary>
+    public bool MergeNotes(IEnumerable<DayNote> incoming, DateTimeOffset now)
+    {
+        var changed = false;
+        try
+        {
+            using var connection = Open(); using var transaction = connection.BeginTransaction();
+            var ceiling = now.AddDays(1).ToUnixTimeMilliseconds(); var latest = now.ToLocalTime().Date.AddDays(1);
+            foreach (var note in incoming)
+            {
+                if (note.At <= 0 || note.At > ceiling || note.Date.Year < 2020 || note.Date > latest) continue;
+                var key = note.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                using var read = connection.CreateCommand(); read.Transaction = transaction;
+                read.CommandText = "SELECT at FROM day_notes WHERE date=$d"; read.Parameters.AddWithValue("$d", key);
+                if (read.ExecuteScalar() is long mine && mine >= note.At) continue;
+                using var write = connection.CreateCommand(); write.Transaction = transaction;
+                write.CommandText = "INSERT OR REPLACE INTO day_notes VALUES ($d,$t,$a)";
+                write.Parameters.AddWithValue("$d", key); write.Parameters.AddWithValue("$t", DayNote.Clean(note.Text)); write.Parameters.AddWithValue("$a", note.At);
+                write.ExecuteNonQuery(); changed = true;
+            }
+            transaction.Commit();
+        }
+        catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException) { return false; }
+        return changed;
+    }
+
+    /// <summary>Writes a note made on this PC, newer than any copy (empty text deletes it).</summary>
+    public bool SetNote(DateTime date, string text, DateTimeOffset now)
+    {
+        var existing = Notes(10_000).FirstOrDefault(n => n.Date == date.Date)?.At ?? 0;
+        return MergeNotes([new DayNote(date.Date, DayNote.Clean(text), Math.Max(now.ToUnixTimeMilliseconds(), existing + 1))], now);
+    }
+
     /// <summary>Streams every reading of one window, oldest first, without holding them all in memory.</summary>
     public void ForEach(string provider, string account, string window, Action<UsagePoint> visit)
     {
@@ -236,7 +324,7 @@ public sealed class UsageHistory
         try
         {
             using var connection = Open(); using var cmd = connection.CreateCommand();
-            cmd.CommandText = "DELETE FROM observations; DELETE FROM history_events; DELETE FROM provider_state;";
+            cmd.CommandText = "DELETE FROM observations; DELETE FROM history_events; DELETE FROM provider_state; DELETE FROM plan_history; DELETE FROM day_notes;";
             cmd.ExecuteNonQuery();
             cmd.CommandText = "VACUUM"; cmd.ExecuteNonQuery();
             Error = null;

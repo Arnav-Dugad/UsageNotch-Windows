@@ -273,11 +273,36 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
         var now = DateTimeOffset.UtcNow;
         lock (_reports) if (!fresh && _reports.TryGetValue(projects, out var cached) && now - cached.At < TimeSpan.FromMinutes(5)) return cached.Value;
         WeekReport? value = null;
-        try { value = WeeklyReport.Build(ItemsSnapshot.Where(i => i.Status != SnapshotStatus.Loading).ToArray(), (p, w) => SummaryFor(p.Snapshot, w), TokenReports(), projects, now, _settings.Use24HourTime); }
+        IReadOnlyList<DayNote> notes; lock (History) notes = History.Notes();
+        try { value = WeeklyReport.Build(ItemsSnapshot.Where(i => i.Status != SnapshotStatus.Loading).ToArray(), (p, w) => SummaryFor(p.Snapshot, w), TokenReports(), projects, now, _settings.Use24HourTime, notes); }
         catch { }
         lock (_reports) _reports[projects] = (now, value);
         return value;
     }
+
+    /// <summary>One combined number for every provider (see <see cref="UsageScore"/>).</summary>
+    public UsageScore? Score() => UsageScore.Compute(ItemsSnapshot.Where(i => i.Status != SnapshotStatus.Loading).ToArray(), (p, w) => SummaryFor(p.Snapshot, w));
+
+    /// <summary>Tokens per limit and the month against the plan, for one token source.</summary>
+    public TokenFacts? FactsFor(TokenReport report)
+    {
+        var p = ItemsSnapshot.FirstOrDefault(i => i.Id == report.Source);
+        var w = p?.SessionWindow is { UsedFraction: not null } s ? s : p?.WeeklyWindow;
+        double? used = p is not null && w is not null ? SummaryFor(p.Snapshot, w)?.Total(7) : null;
+        return WeeklyReport.Facts(report, p, used, w?.Label);
+    }
+
+    /// <summary>Saves a day note made on this PC (empty text deletes it) and forgets the cached report.</summary>
+    public bool SetNote(DateTime date, string text)
+    {
+        bool changed;
+        lock (History) changed = History.SetNote(date, text, DateTimeOffset.UtcNow);
+        lock (_reports) _reports.Clear();
+        return changed;
+    }
+
+    /// <summary>Forgets the cached report after notes arrive from a phone.</summary>
+    public void NotesChanged() { lock (_reports) _reports.Clear(); }
 
     public StartHint? BestStartFor(ProviderViewModel item)
     {
@@ -296,7 +321,7 @@ public sealed class UsageCoordinator : IDisposable, INotifyPropertyChanged
         }
         var local = DateTimeOffset.Now;
         var report = _settings.WeeklyRecap && local.DayOfWeek == DayOfWeek.Sunday && local.Hour >= 18 ? WeekReportFor() : null;
-        return new AlertContext(paces, starts, summaries, report);
+        return new AlertContext(paces, starts, summaries, report, _settings.ProjectBudgets.Count > 0 ? TokenReports() : null);
     }
 
     private static async Task OnUi(Action action)

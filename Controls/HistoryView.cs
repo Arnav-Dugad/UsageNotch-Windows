@@ -25,6 +25,12 @@ public sealed class HistoryView : Grid
     private int _days = 7;
     private DateTime? _openDay;
     private int _generation;
+    // One chart kept across range changes, so 7 → 30 → 90 days morphs instead of redrawing.
+    private DailyBars? _bars;
+    private string? _barsKey;
+    private Action<DayUsage>? _onDay;
+    private bool _rangeOnly;
+    private IReadOnlyList<DayNote> _notes = [];
 
     public HistoryView()
     {
@@ -38,6 +44,7 @@ public sealed class HistoryView : Grid
         Loaded += (_, _) => Refresh();
         IsVisibleChanged += (_, _) => { if (IsVisible) Refresh(); };
         Theme.Changed += () => { if (IsLoaded) Refresh(); };
+        if (System.Windows.Application.Current is App app) app.NotesChanged += () => { if (IsLoaded) Refresh(); };
     }
 
     private bool Reduced => _coordinator is null || Motion.IsReduced(_coordinator.Settings);
@@ -75,13 +82,18 @@ public sealed class HistoryView : Grid
             var tokens = _coordinator.TokenReports();
             var report = _coordinator.WeekReportFor();
             var allTime = _coordinator.AllTimeFor(provider.Snapshot, window);
-            return (summary, others, otherWindows, tokens, report, allTime);
+            var score = _coordinator.Score();
+            IReadOnlyList<DayNote> notes; lock (_coordinator.History) notes = _coordinator.History.Notes();
+            IReadOnlyList<PlanChange> plans; lock (_coordinator.History) plans = _coordinator.History.Plans(provider.Id, _coordinator.History.AccountKey(provider.Snapshot));
+            var facts = tokens.ToDictionary(t => t.Source, t => _coordinator.FactsFor(t));
+            return (summary, others, otherWindows, tokens, report, allTime, score, notes, plans, facts);
         });
         if (generation != _generation) return;
         _body.Children.Clear();
-        var index = 0;
-        void Add(UIElement e) { _body.Children.Add(e); Motion.Rise(e, index++, Reduced); }
-        if (data.report is { } week) Add(ReportView.Card(week, items, s, Reduced, Share));
+        _notes = data.notes;
+        var index = 0; var rise = !_rangeOnly; _rangeOnly = false;
+        void Add(UIElement e) { _body.Children.Add(e); if (rise) Motion.Rise(e, index++, Reduced); }
+        if (data.report is { } week) Add(ReportView.Card(week, items, s, Reduced, Share, data.score));
         if (data.summary is not { } sum)
         {
             Add(Ui.Card(Ui.Stack(Ui.Text("No history yet", 20, FontWeights.Light), Ui.Text("UsageNotch records readings while it runs. Daily totals appear after a few readings.", 12.5, FontWeights.Normal, "Ui.Muted"))));
@@ -99,9 +111,19 @@ public sealed class HistoryView : Grid
             tiles.Add(Tile("Streak", sum.Streak > 0 ? $"{sum.Streak} day{(sum.Streak == 1 ? "" : "s")}" : "—", "in a row with usage"));
             Add(tiles.Panel);
 
-            var bars = new DailyBars { Accent = accent, Reduced = Reduced, Selected = _openDay };
+            var key = provider.Id + "|" + window.Id + "|" + Theme.Current.Dark;
+            if (_bars is null || _barsKey != key)
+            {
+                _bars = new DailyBars(); _barsKey = key;
+                var created = _bars; created.DayClicked += day => _onDay?.Invoke(day);
+            }
+            else if (_bars.Parent is System.Windows.Controls.Panel oldParent) oldParent.Children.Remove(_bars);
+            var bars = _bars;
+            bars.Accent = accent; bars.Reduced = Reduced; bars.Selected = _openDay;
+            bars.Notes = data.notes.Where(n => !n.Deleted).Select(n => n.Date).ToHashSet();
+            bars.Unusual = HistoryInsights.Unusual(sum.Calendar, 90).ToDictionary(u => u.Date, u => u.Ratio);
             var dayCard = new Border();
-            bars.DayClicked += day => { _openDay = _openDay == day.Date ? null : day.Date; bars.Selected = _openDay; bars.InvalidateVisual(); ShowDay(dayCard, day, sum, data.otherWindows, provider, window); };
+            _onDay = day => { _openDay = _openDay == day.Date ? null : day.Date; bars.Selected = _openDay; bars.InvalidateVisual(); ShowDay(dayCard, day, sum, data.otherWindows, provider, window); };
             bars.Days = days;
             var coverage = sum.Coverage(_days);
             var trust = Ui.Text($"This PC observed {Math.Round(coverage * 100):0}% of these {_days} days. Usage while it was off or asleep is still counted, on the day it next read your usage, so totals stay complete; only the hour it happened is unknown.", 11.5, FontWeights.Normal, "Ui.Faint");
@@ -109,11 +131,11 @@ public sealed class HistoryView : Grid
             Add(Ui.Card(Ui.Stack(Title("\uE9D2", "Daily usage", window.Label + " · 100% = one full limit"), bars, trust, dayCard), accent));
             if (_openDay is { } open && days.FirstOrDefault(d => d.Date == open) is { } openDay) ShowDay(dayCard, openDay, sum, data.otherWindows, provider, window);
 
-            var calendar = new CalendarGrid { Accent = accent, Days = sum.Calendar };
+            var calendar = new CalendarGrid { Accent = accent, Days = sum.Calendar, Notes = bars.Notes };
             var calendarDay = new Border();
             calendar.DayClicked += day => ShowDay(calendarDay, day, sum, data.otherWindows, provider, window);
             Add(Ui.Card(Ui.Stack(Title("\uE787", "90 days", "outlined days had no readings"), calendar, calendarDay), accent));
-            if (data.allTime is { } all) Add(ReportView.AllTime(all, window, accent));
+            if (data.allTime is { } all) Add(ReportView.AllTime(all, window, accent, data.plans, s.Use24HourTime));
 
             var series = data.others.Where(o => o.Item2 is not null).Select(o => new CompareChart.Series(o.p.DisplayName, o.p.AccentColor, o.Item2!.Calendar.TakeLast(_days).ToArray())).ToList();
             if (series.Count > 1)
@@ -135,7 +157,9 @@ public sealed class HistoryView : Grid
             Add(Ui.Card(Ui.Stack(Title("\uE9D9", "Insights", window.Label), insights), accent));
         }
         foreach (var report in data.tokens)
-            Add(Ui.Card(Ui.Stack(Title("\uE8EF", report.Label + " tokens", "this PC"), TokenViews.Summary(report, _coordinator.Items.FirstOrDefault(p => p.Id == report.Source)?.AccentColor ?? accent, Reduced)), _coordinator.Items.FirstOrDefault(p => p.Id == report.Source)?.AccentColor));
+            Add(Ui.Card(Ui.Stack(Title("\uE8EF", report.Label + " tokens", report.AllDevices ? "all devices" : "this PC"),
+                TokenViews.Summary(report, _coordinator.Items.FirstOrDefault(p => p.Id == report.Source)?.AccentColor ?? accent, Reduced, facts: data.facts.GetValueOrDefault(report.Source), budgets: s.ProjectBudgets)),
+                _coordinator.Items.FirstOrDefault(p => p.Id == report.Source)?.AccentColor));
         if (data.tokens.Count == 0 && s.TrackLocalTokens && _coordinator.Tokens.Status is { Length: > 0 } status)
             Add(Ui.Card(Ui.Stack(Title("\uE8EF", "Tokens", null), Ui.Text(status, 12.5, FontWeights.Normal, "Ui.Muted"))));
     }
@@ -143,7 +167,7 @@ public sealed class HistoryView : Grid
     private GlassTabBar MakeRange()
     {
         var bar = new GlassTabBar(["7 days", "30 days", "90 days"], _days switch { 7 => 0, 30 => 1, _ => 2 }, 32, 12) { Reduced = Reduced, Margin = new Thickness(4, 0, 0, 8), VerticalAlignment = VerticalAlignment.Top };
-        bar.SelectionChanged += i => { _days = i switch { 0 => 7, 1 => 30, _ => 90 }; _openDay = null; Refresh(); };
+        bar.SelectionChanged += i => { _days = i switch { 0 => 7, 1 => 30, _ => 90 }; _openDay = null; _rangeOnly = true; Refresh(); };
         return bar;
     }
 
@@ -202,6 +226,14 @@ public sealed class HistoryView : Grid
         facts.Add(Fact("Compared with usual", average is { } a && day.Used is { } du && a > .0001 ? (du >= a ? $"{du / a:0.0}× more" : $"{Math.Round((1 - du / a) * 100):0}% less") : "—", average is { } av ? $"than your {Ui.Limits(av)} average" : "no average yet"));
         facts.Add(Fact("Rank", rank is { } r ? $"#{r}" : "—", $"of {recorded.Count} recorded days"));
         var stack = Ui.Stack(Ui.Text(day.Date.ToString("dddd, MMMM d"), 18, FontWeights.SemiBold), facts.Panel);
+        if (HistoryInsights.Unusual(sum.Calendar, 90).FirstOrDefault(u => u.Date == day.Date) is { } odd)
+        {
+            var unusual = Ui.Columns((Ui.Icon("\uE7BA", 13, "Ui.Warning", new Thickness(0, 1, 8, 0)), GridLength.Auto),
+                (Ui.Text($"{odd.Ratio:0.#}× your normal {day.Date:dddd} ({Ui.Limits(odd.Typical)} is usual, from the 8 weeks before)", 12, FontWeights.Normal, "Ui.Muted"), new GridLength(1, GridUnitType.Star)));
+            unusual.Margin = new Thickness(0, 10, 0, 0);
+            stack.Children.Add(unusual);
+        }
+        stack.Children.Add(NoteEditor(day.Date));
         foreach (var (w, summary) in others)
         {
             var other = summary?.Calendar.FirstOrDefault(d => d.Date == day.Date);
@@ -217,6 +249,34 @@ public sealed class HistoryView : Grid
             Motion.Spring(scale, ScaleTransform.ScaleXProperty, 1, false, .72, 560); Motion.Spring(scale, ScaleTransform.ScaleYProperty, 1, false, .72, 560);
             Motion.To(card, OpacityProperty, 1, 220, false);
         }
+    }
+
+    /// <summary>A one-line note for the day ("Big refactor"), saved at once and synced with your phone.</summary>
+    private UIElement NoteEditor(DateTime date)
+    {
+        var existing = _notes.FirstOrDefault(n => n.Date == date.Date && !n.Deleted)?.Text ?? "";
+        var box = new System.Windows.Controls.TextBox { Text = existing, MaxLength = DayNote.MaxLength, MinWidth = 260 };
+        box.SetResourceReference(StyleProperty, "Field");
+        System.Windows.Automation.AutomationProperties.SetName(box, "Note for " + date.ToString("MMMM d"));
+        var hint = Ui.Text(existing.Length == 0 ? "Add a note, like \"Big refactor\" or \"Exam week\". It shows on History, in This week and on your phone." : "Shown on History, in This week and on your phone.", 11.5, FontWeights.Normal, "Ui.Faint");
+        hint.Margin = new Thickness(0, 6, 0, 0);
+        void Save(string text)
+        {
+            if (_coordinator is null) return;
+            var clean = DayNote.Clean(text);
+            if (clean == existing) return;
+            _coordinator.SetNote(date, clean);
+            hint.Text = clean.Length == 0 ? "Note deleted." : "Saved.";
+            existing = clean; Refresh();
+        }
+        var save = Ui.Button("Save note", () => Save(box.Text), false, "\uE74E", Reduced);
+        var delete = Ui.Button("Delete", () => { box.Text = ""; Save(""); }, false, "\uE74D", Reduced);
+        delete.Visibility = existing.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        box.KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) { Save(box.Text); e.Handled = true; } };
+        save.Margin = new Thickness(10, 0, 0, 0); delete.Margin = new Thickness(8, 0, 0, 0);
+        var row = Ui.Columns((box, new GridLength(1, GridUnitType.Star)), (save, GridLength.Auto), (delete, GridLength.Auto));
+        var label = Ui.Text("Note", 11, FontWeights.SemiBold, "Ui.Faint", false); label.Margin = new Thickness(0, 14, 0, 6);
+        return Ui.Stack(label, row, hint);
     }
 
     private static Grid Fact(string label, string value, string note)

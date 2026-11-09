@@ -24,6 +24,8 @@ public sealed class ProviderDetailView : Grid
     private readonly Grid _ringHost;
     private readonly WrapPanel _cards = new();
     private readonly List<ProviderVisuals.LimitRow> _rows = [];
+    private StackPanel? _planBody;
+    private Border? _planCard;
     private readonly RollingNumber _headline;
     private readonly TextBlock _caption;
     private readonly TextBlock _reset;
@@ -168,6 +170,12 @@ public sealed class ProviderDetailView : Grid
             Add(Ui.Card(shares, p.AccentColor));
         }
 
+        // Plan history
+        var plans = new StackPanel(); CardTitle("\uE8C7", "Plan history", plans);
+        _planBody = Ui.Stack(); plans.Children.Add(_planBody);
+        _planCard = Ui.Card(plans, p.AccentColor); _planCard.Visibility = Visibility.Collapsed;
+        Add(_planCard);
+
         // Budgets for every limit
         Add(BudgetsCard());
 
@@ -210,6 +218,9 @@ public sealed class ProviderDetailView : Grid
             startDetail.Text = $"It renews around {TimeDisplay.Clock(hint.RenewAt, s.Use24HourTime)}, in the middle of your usual busy hours ({BestStart.Hours(hint.BusyFrom, hint.BusyTo, s.Use24HourTime)}).";
         }
 
+        var planList = await Task.Run(() => { lock (_coordinator.History) return _coordinator.History.Plans(p.Id, _coordinator.History.AccountKey(p.Snapshot)); });
+        if (_planBody is not null && _planCard is not null && PlanTimeline.Build(planList, p.AccentColor, s.Use24HourTime) is { } timeline)
+        { _planBody.Children.Clear(); _planBody.Children.Add(timeline); _planCard.Visibility = Visibility.Visible; }
         var summary = primary is null ? null : await Task.Run(() => _coordinator.SummaryFor(p.Snapshot, primary));
         insightBody.Children.Clear();
         if (summary is null) insightBody.Children.Add(Ui.Text("History appears after a few readings on this PC.", 12.5, FontWeights.Normal, "Ui.Muted"));
@@ -217,7 +228,11 @@ public sealed class ProviderDetailView : Grid
 
         var reports = await Task.Run(() => _coordinator.TokenReports());
         tokenBody.Children.Clear();
-        if (reports.FirstOrDefault(r => r.Source == p.Id) is { } report) tokenBody.Children.Add(TokenViews.Summary(report, p.AccentColor, _reduced, compact: true));
+        if (reports.FirstOrDefault(r => r.Source == p.Id) is { } report)
+        {
+            var facts = await Task.Run(() => _coordinator.FactsFor(report));
+            tokenBody.Children.Add(TokenViews.Summary(report, p.AccentColor, _reduced, compact: true, facts: facts, budgets: s.ProjectBudgets));
+        }
         else tokenBody.Children.Add(Ui.Text(_coordinator.Tokens.Status is { Length: > 0 } status ? status : "No local transcripts found for this account yet.", 12.5, FontWeights.Normal, "Ui.Muted"));
     }
 

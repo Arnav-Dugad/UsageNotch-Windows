@@ -15,7 +15,8 @@ public sealed record AlertContext(
     IReadOnlyDictionary<string, PaceForecast?> Paces,
     IReadOnlyDictionary<string, StartHint?> Starts,
     IReadOnlyDictionary<string, WindowSummary?> Summaries,
-    WeekReport? Report = null)
+    WeekReport? Report = null,
+    IReadOnlyList<TokenReport>? Tokens = null)
 {
     public static readonly AlertContext Empty = new(new Dictionary<string, PaceForecast?>(), new Dictionary<string, StartHint?>(), new Dictionary<string, WindowSummary?>());
     public static string Key(string provider, string window) => provider + "|" + window;
@@ -171,6 +172,21 @@ public sealed class AlertService
                 && (session.UsedFraction ?? 0) < .02 && Once($"plan|{item.Id}|start|{today}"))
                 Publish(new AlertNotice($"{item.DisplayName} · a good moment to start",
                     $"Start a session now and it renews around {TimeDisplay.Clock(hint.RenewAt, use24)}, in the middle of your busy hours ({BestStart.Hours(hint.BusyFrom, hint.BusyTo, use24)}).", false, item.Id, session.UsedFraction));
+        }
+        // Project token budgets: once a week each at 80% and at 100% of the budget (last 7 days of tokens).
+        if (_settings.AlertBudgets && _settings.ProjectBudgets.Count > 0 && context.Tokens is { } tokenReports)
+        {
+            var week = System.Globalization.ISOWeek.GetYear(now.ToLocalTime().DateTime) + "-" + System.Globalization.ISOWeek.GetWeekOfYear(now.ToLocalTime().DateTime);
+            foreach (var report in tokenReports)
+                foreach (var project in report.Projects)
+                {
+                    var budget = _settings.ProjectBudgets.GetValueOrDefault(report.Source + "|" + project.Name); if (budget <= 0) continue;
+                    var share = (double)project.Total / budget; var basis = $"project|{report.Source}|{project.Name}|{week}";
+                    if (share >= 1 && Once(basis + "|over"))
+                        Publish(new AlertNotice($"{project.Name} · over its token budget", $"{WeeklyReport.Tokens(project.Total)} tokens in the last 7 days; the budget is {WeeklyReport.Tokens(budget)} a week ({report.Label}).", true, report.Source, Math.Min(1, share)));
+                    else if (share >= .8 && share < 1 && !_settings.AlertState.ContainsKey(basis + "|over") && Once(basis + "|near"))
+                        Publish(new AlertNotice($"{project.Name} · {Math.Round(share * 100):0}% of its token budget", $"{WeeklyReport.Tokens(project.Total)} of {WeeklyReport.Tokens(budget)} tokens this week ({report.Label}).", false, report.Source, share));
+                }
         }
         if (_settings.WeeklyRecap && Recap(items, context, now) is { } recap && (_settings.LastRecapAt is null || now - _settings.LastRecapAt > TimeSpan.FromDays(5)))
         {

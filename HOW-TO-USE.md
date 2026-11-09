@@ -1,6 +1,15 @@
-﻿# UsageNotch 2.8.0 — quick start
+﻿# UsageNotch 2.9.0 — quick start
 
-## What's new in 2.8
+## What's new in 2.9
+
+- **Usage score**: the top of Overview shows one number for all your providers, the average of how much of each weekly limit you've used, with last week's.
+- **Notes on days**: in History, click a day and type a note such as "Big refactor", then press Enter. Notes show on the chart and in This week, and sync with your phone.
+- **This week** now compares each provider with your typical week and points out unusual days.
+- **Tokens**: History → Tokens shows this month at API prices against your plan, tokens per session limit and an 8-week model mix. Set weekly project budgets in Settings → Budgets → Project token budgets.
+- **Plan history**: History → All time and each provider's page show when your plan changed.
+
+
+## 2.8
 
 - **This week**: History opens with a plain-English report of your week: how it compares with the week before, limits you hit, your busiest day and hours. **Share your week** saves a story-sized image to Pictures › UsageNotch and copies it.
 - **History that's kept**: readings stay on this PC until you delete them (Settings → Data). History shows 7, 30 or 90 days and an **All time** card since your first reading.

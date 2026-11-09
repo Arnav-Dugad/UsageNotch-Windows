@@ -22,6 +22,10 @@ Feature names in Windows 2.6:
 | `accounts` | provider ids may carry an account suffix (`claude:work`); `kind` and `accountLabel` are set |
 | `report` | `report` at the root: "This week" (Windows 2.8) |
 | `alltime` | `allTime` in `history[]`: everything recorded for that window (Windows 2.8) |
+| `score` | `score` at the root and `unusual` in `history[]` (Windows 2.9) |
+| `notes` | `notes` at the root and `PUT /v1/notes` (Windows 2.9) |
+| `plans` | `plans` in `providers[]` (Windows 2.9) |
+| `tokens2` | `month`, `plan`, `perLimit`, `modelWeeks` and project budgets in `tokens.sources[]` (Windows 2.9) |
 
 ## Endpoints
 
@@ -30,6 +34,7 @@ Feature names in Windows 2.6:
 | `GET /v1/snapshot` | none | snapshot JSON |
 | `POST /v1/refresh` | empty | Fresh snapshot JSON. Header `X-UsageNotch-Refresh`: `done`, `throttled` (another refresh within 20 s, or provider cooldowns; the snapshot is the latest one) or `timeout` (25 s passed; the snapshot has whatever finished) |
 | `PUT /v1/settings` | `{"shared": {…}}`, at most 32 KB, `Content-Type: application/json` | `{"shared": {…merged}}`; 400 when invalid |
+| `PUT /v1/notes` | `{"notes": [{"date","text","at"}]}`, at most 64 KB (Windows 2.9, feature `notes`) | `{"notes": [ …all ]}`; 400 when invalid |
 
 All requests are rate-limited together (30 a minute). Query strings are rejected.
 
@@ -95,6 +100,28 @@ All requests are rate-limited together (30 a minute). Query strings are rejected
 
     Project names appear in `insights[].text` only when the PC shares project names with phones.
   - `alltime`: `history[].allTime` is everything this PC has recorded for that window, with no time limit: `{ "since": 1700000000000, "used": 37.4, "activeDays": 120, "recordedDays": 131, "hits": 14, "bestDay": "2026-10-02", "bestUsed": 3.2 }`. `used` and `bestUsed` are in limits, counted the same way as the daily totals. `hits` counts limit periods that reached 99.5%.
+- Windows 2.9 adds, all optional:
+  - `score` (feature `score`), at the root: one combined usage number. Each provider counts once, using its weekly limit when it has one and its main limit otherwise. `value` is the average used of those limits, 0–100. `previous` is the same average over each provider's last finished weekly period, or null unless every scored provider has one.
+
+    ```jsonc
+    "score": { "value": 46, "previous": 38,
+      "providers": [ { "id": "claude", "name": "Claude", "window": "seven_day", "label": "All models", "used": 0.71 } ] }
+    ```
+  - `report` gains:
+    - `providers[].typical`: the median total of up to 8 earlier 7-day blocks (the ones before this week) that have readings on at least 3 days, or null with fewer than 3 such blocks. `typicalChange` is `(used - typical) / typical` when typical ≥ 0.05.
+    - `coverage` (0..1): how much of the week this PC observed. `note`: a sentence when coverage is under 0.5, for example "This PC saw 34% of this week, so which day and hour things happened is less certain. Totals are still complete."
+    - `notes`: `[{ "date": "2026-11-04", "text": "Big refactor" }]`, your day notes from this week.
+    - New insight kinds, in this order after `change`: `typical`, then `hits`, `busiest`, `unusual`, `hours`, `unused`, `streak`, `efficiency`, `value`, `tokens`. At most 8 sentences. A `change` sentence carries the typical-week comparison in brackets ("… more than the week before (31% above your typical week)."); `typical` appears on its own only when there's no week-before comparison.
+  - `history[].unusual` (feature `score`): `[{ "date": "2026-11-04", "ratio": 2.1, "typical": 0.45 }]` for days in the last 30 whose usage was at least 1.8× the median of the same weekday over the 8 weeks before (at least 3 of those weekdays with readings, median ≥ 0.05).
+  - `notes` (feature `notes`), at the root: `[{ "date": "2026-11-04", "text": "Big refactor", "at": 1730000000000 }]`, the 500 newest by date. Text is at most 140 characters on one line. An empty `text` is a deleted note (a tombstone). Phones merge by `at` (larger wins; on a tie the PC wins). `PUT /v1/notes` with `{"notes": [ … ]}` (at most 64 KB) merges the phone's changes and returns `{"notes": [ …all ]}`.
+  - `providers[].plans` (feature `plans`): `[{ "at": 1730000000000, "plan": "Max 5×" }]`, oldest first, at most 20. These are the times UsageNotch first saw each plan, so the first entry means "since we started watching".
+  - `tokens.sources[]` (feature `tokens2`) gains:
+    - `month`: `{ "from": "2026-11-01", "total": 123, "cost": 41.2 }`.
+    - `plan`: `{ "name": "Max 5×", "price": 100 }`, the plan's US list price a month, when known: Claude Pro 20, Max 5× 100, Max 20× 200. It's absent for Codex, whose costs are unknown.
+    - `perLimit`: `{ "tokens": 9200000, "label": "session" }`, tokens this week for each full main limit used (when at least half a limit was used).
+    - `modelWeeks`: `[{ "week": "2026-10-12", "models": [{ "name": "claude-opus-5-5", "total": 123 }] }]`, 8 weeks (each starting 7·k days before today's week block), oldest first, the 5 biggest models plus "Other".
+    - `projects[].budget`: `{ "tokens": 50000000 }`, the weekly token budget for that project, compared with the project's `total` (last 7 days).
+  - Shared settings gain `projectBudget:<sourceId>|<project>` → `{ "tokens": 100000–1000000000000 }`. Project names are sent only when the PC shares them.
 - From 2.8, `unused`, `hits` and `reliability` count real limit periods: a period ends only when the limit renews (its reset passed and a later one was reported, or usage fell by more than 10 points). Earlier versions split a period at sampling gaps and 1-minute reset drifts. The `period` field on readings still marks continuous observation segments, for pace estimates.
 - Phones keep their own permanent copy (Android 1.8): every snapshot's `calendar` days are saved on the phone and kept until you delete them, so History keeps working past 90 days and while the PC is off.
 - Forecast ranges: phones show the pace band as a time range. With `limitAt` set and `highRate` > 0, the earliest likely time is `now + (1 - used) / (highRate / 100)` hours, and the latest is the same with `lowRate`. Show "limit around 4:10 PM (likely 3:40–4:50 PM)" when both come before the reset and are at least 10 minutes apart, "(as early as 3:40 PM)" when only the early one does, and nothing extra otherwise.
@@ -114,6 +141,7 @@ The two apps sync a last-writer-wins map. Each entry is `{"v": value, "at": epoc
 | `order` | `["claude", "codex", …]`, at most 16 provider ids |
 | `alerts:thresholds` | `{"warn": 1–100, "critical": 1–100}` |
 | `alerts:quiet` | `{"on": true, "start": 0–23, "end": 0–23}` |
+| `projectBudget:<sourceId>\|<project>` | `{"tokens": 100000–1000000000000}`, a weekly token budget for one project (Windows 2.9) |
 
 The PC includes `shared` in every snapshot, including the relay copy. A phone pushes its changes with `PUT /v1/settings` whenever it reaches the PC on the local link. Edits made while it's on internet sync wait until then.
 

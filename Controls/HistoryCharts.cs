@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using UsageNotch.Services;
+using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
 using Pen = System.Windows.Media.Pen;
 using Point = System.Windows.Point;
@@ -27,11 +28,22 @@ public sealed class DailyBars : FrameworkElement
 {
     private static readonly DependencyProperty GrowProperty = DependencyProperty.Register("Grow", typeof(double), typeof(DailyBars),
         new FrameworkPropertyMetadata(1d, FrameworkPropertyMetadataOptions.AffectsRender));
+    private static readonly DependencyProperty MorphProperty = DependencyProperty.Register("Morph", typeof(double), typeof(DailyBars),
+        new FrameworkPropertyMetadata(1d, FrameworkPropertyMetadataOptions.AffectsRender));
     private IReadOnlyList<DayUsage> _days = [];
+    private IReadOnlyList<DayUsage> _old = [];
     private int? _hover;
     public Color Accent { get; set; } = Accents.FromArgb(DesignTokens.Live);
     public bool Reduced { get; set; }
     public DateTime? Selected { get; set; }
+    /// <summary>Days with a note get a small dot above their bar.</summary>
+    public IReadOnlySet<DateTime> Notes { get; set; } = new HashSet<DateTime>();
+    /// <summary>Unusual days (well above the usual for their weekday) get a small ring above their bar.</summary>
+    public IReadOnlyDictionary<DateTime, double> Unusual { get; set; } = new Dictionary<DateTime, double>();
+    /// <summary>Off for charts that aren't in limits (tokens): no "1 full limit" or average line.</summary>
+    public bool LimitLines { get; set; } = true;
+    /// <summary>The tooltip for a day; defaults to usage in limits.</summary>
+    public Func<DayUsage, string>? Describe { get; set; }
     public event Action<DayUsage>? DayClicked;
 
     public DailyBars()
@@ -43,21 +55,41 @@ public sealed class DailyBars : FrameworkElement
         Theme.Changed += InvalidateVisual;
     }
 
+    /// <summary>
+    /// New days grow in on first show. After that, a new range morphs: days in both ranges slide and resize into place,
+    /// new days grow from the baseline, and days that left shrink away, so 7 → 30 → 90 reads as one chart zooming out.
+    /// </summary>
     public IReadOnlyList<DayUsage> Days
     {
         get => _days;
         set
         {
+            var morph = _days.Count > 0 && IsLoaded && !Reduced;
+            _old = morph ? _days : [];
             _days = value; InvalidateVisual();
-            BeginAnimation(GrowProperty, null);
-            if (!Reduced) BeginAnimation(GrowProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(900)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+            BeginAnimation(GrowProperty, null); BeginAnimation(MorphProperty, null);
+            if (Reduced) { SetValue(GrowProperty, 1d); SetValue(MorphProperty, 1d); return; }
+            if (morph)
+            {
+                SetValue(GrowProperty, 1d);
+                BeginAnimation(MorphProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(DesignTokens.Motion.EmphasisMs + 240)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } });
+            }
+            else
+            {
+                SetValue(MorphProperty, 1d);
+                BeginAnimation(GrowProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(900)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+            }
         }
     }
 
     private const double Bottom = 22, Top = 12;
     private double Slot => _days.Count == 0 ? 1 : ActualWidth / _days.Count;
     private int? Index(double x) => _days.Count == 0 ? null : (int)Math.Clamp(Math.Floor(x / Slot), 0, _days.Count - 1);
-    private string? Tip(int? i) => i is not { } k ? null : $"{_days[k].Date:dddd, MMM d}\n" + (_days[k].Used is { } u ? $"{Ui.Limits(u)} of the limit ({u * 100:0.#}%)\n{Math.Round(_days[k].Coverage * 100):0}% of the day observed" : "No readings that day");
+    private string? Tip(int? i) => i is not { } k ? null : Describe is { } describe ? describe(_days[k]) : $"{_days[k].Date:dddd, MMM d}\n" + (_days[k].Used is { } u ? $"{Ui.Limits(u)} of the limit ({u * 100:0.#}%)\n{Math.Round(_days[k].Coverage * 100):0}% of the day observed" : "No readings that day")
+        + (Unusual.TryGetValue(_days[k].Date, out var ratio) ? $"\n{ratio:0.#}× your normal {_days[k].Date:dddd}" : "") + (Notes.Contains(_days[k].Date) ? "\nHas a note" : "");
+
+    private static double MaxOf(IReadOnlyList<DayUsage> days) => Math.Max(.05, days.Where(d => d.Used is not null).Select(d => d.Used!.Value).DefaultIfEmpty(0).Max()) * 1.1;
+    private static double Lerp(double a, double b, double t) => a + (b - a) * t;
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -66,27 +98,52 @@ public sealed class DailyBars : FrameworkElement
         if (_days.Count == 0 || ActualWidth < 10) return;
         var t = Theme.Current;
         var recorded = _days.Where(d => d.Used is not null).Select(d => d.Used!.Value).ToArray();
-        var max = Math.Max(.05, recorded.DefaultIfEmpty(0).Max()) * 1.1;
+        var m = Math.Clamp((double)GetValue(MorphProperty), 0, 1.15);
+        var morphing = _old.Count > 0 && m < 1;
+        var newMax = MaxOf(_days); var max = morphing ? Lerp(MaxOf(_old), newMax, Math.Min(1, m)) : newMax;
         var plot = ActualHeight - Bottom - Top; var slot = Slot; var width = Math.Clamp(slot * .62, 2, 34);
+        var oldSlot = _old.Count == 0 ? slot : ActualWidth / _old.Count; var oldWidth = Math.Clamp(oldSlot * .62, 2, 34);
+        var oldIndex = new Dictionary<DateTime, int>(); for (var j = 0; j < _old.Count; j++) oldIndex[_old[j].Date] = j;
         var grow = (double)GetValue(GrowProperty);
+        Brush Fill(bool highlight) { var f = new LinearGradientBrush(Palette.Alpha(Accent, highlight ? 1 : .92), Palette.Alpha(Accent, highlight ? .55 : .35), 90); f.Freeze(); return f; }
+
+        // Days that left the range shrink away towards the left edge.
+        if (morphing)
+        {
+            var newDates = _days.Select(d => d.Date).ToHashSet();
+            for (var j = 0; j < _old.Count; j++)
+            {
+                if (newDates.Contains(_old[j].Date) || _old[j].Used is not { } u) continue;
+                var x = Lerp(j * oldSlot + (oldSlot - oldWidth) / 2, 0, m); var w = Lerp(oldWidth, 0, m); var h = plot * u / max * (1 - m);
+                if (w > .5 && h > .5) { dc.PushOpacity(1 - m); dc.DrawRoundedRectangle(Fill(false), null, new Rect(x, Top + plot - h, w, h), Math.Min(6, w / 2), Math.Min(6, w / 2)); dc.Pop(); }
+            }
+        }
         for (var i = 0; i < _days.Count; i++)
         {
-            var d = _days[i]; var x = i * slot + (slot - width) / 2;
-            var local = Math.Clamp(grow * 1.6 - i / (double)_days.Count * .6, 0, 1);
-            var eased = 1 - Math.Pow(1 - local, 3);
+            var d = _days[i];
+            var x = i * slot + (slot - width) / 2; var w = width;
+            double ease;
+            if (morphing)
+            {
+                if (oldIndex.TryGetValue(d.Date, out var j)) { x = Lerp(j * oldSlot + (oldSlot - oldWidth) / 2, x, m); w = Lerp(oldWidth, width, m); ease = 1; }
+                else ease = Math.Clamp(m, 0, 1);
+            }
+            else { var local = Math.Clamp(grow * 1.6 - i / (double)_days.Count * .6, 0, 1); ease = 1 - Math.Pow(1 - local, 3); }
             if (d.Used is not { } used)
             {
-                dc.DrawRoundedRectangle(null, ChartInk.Dashed(Palette.Alpha(t.Faint, .5)), new Rect(x, Top + plot - 10, width, 10), 3, 3);
+                if (!morphing || m > .6) dc.DrawRoundedRectangle(null, ChartInk.Dashed(Palette.Alpha(t.Faint, .5)), new Rect(x, Top + plot - 10, w, 10), 3, 3);
                 continue;
             }
-            var h = Math.Max(3, plot * used / max * eased);
+            var h = Math.Max(3, plot * used / max * ease);
             var highlight = _hover == i || Selected == d.Date;
-            var top = Palette.Alpha(Accent, highlight ? 1 : .92); var bottom = Palette.Alpha(Accent, highlight ? .55 : .35);
-            var fill = new LinearGradientBrush(top, bottom, 90); fill.Freeze();
-            dc.DrawRoundedRectangle(fill, null, new Rect(x, Top + plot - h, width, h), Math.Min(6, width / 2), Math.Min(6, width / 2));
-            if (highlight) dc.DrawRoundedRectangle(null, new Pen(Palette.Frozen(Palette.Alpha(t.Ink, .6)), 1), new Rect(x - 1, Top + plot - h - 1, width + 2, h + 2), 6, 6);
+            dc.DrawRoundedRectangle(Fill(highlight), null, new Rect(x, Top + plot - h, w, h), Math.Min(6, w / 2), Math.Min(6, w / 2));
+            if (highlight) dc.DrawRoundedRectangle(null, new Pen(Palette.Frozen(Palette.Alpha(t.Ink, .6)), 1), new Rect(x - 1, Top + plot - h - 1, w + 2, h + 2), 6, 6);
+            // Markers: a dot for a note, a ring for an unusual day.
+            var markerY = Math.Max(4, Top + plot - h - 7); var cx = x + w / 2; var r = Math.Clamp(w / 6, 2, 3.5);
+            if (Unusual.ContainsKey(d.Date)) dc.DrawEllipse(null, new Pen(Palette.Frozen(Palette.Warning), 1.4), new Point(cx, markerY), r + 1, r + 1);
+            if (Notes.Contains(d.Date)) dc.DrawEllipse(Palette.Frozen(t.Ink), null, new Point(cx, Unusual.ContainsKey(d.Date) ? markerY - 2 * r - 4 : markerY), r, r);
         }
-        if (max >= .9)
+        if (LimitLines && !morphing && max >= .9)
         {
             // One full limit, so bars read as "less than a limit" or "more than a limit" at a glance.
             var full = Top + plot - plot * 1 / max;
@@ -94,19 +151,22 @@ public sealed class DailyBars : FrameworkElement
             var label = ChartInk.Text(this, "1 full limit", 10, t.Faint);
             dc.DrawText(label, new Point(0, Math.Max(0, full - label.Height - 1)));
         }
-        if (recorded.Length > 0)
+        if (LimitLines && !morphing && recorded.Length > 0)
         {
             var average = recorded.Average(); var y = Top + plot - plot * average / max;
             dc.DrawLine(ChartInk.Dashed(Palette.Alpha(t.Muted, .8)), new Point(0, y), new Point(ActualWidth, y));
             var label = ChartInk.Text(this, $"average {Ui.Limits(average)}", 10, t.Muted);
             dc.DrawText(label, new Point(ActualWidth - label.Width, Math.Max(0, y - label.Height - 1)));
         }
-        var step = _days.Count > 14 ? 7 : 1;
+        if (morphing && m < .5) return;
+        var step = _days.Count > 45 ? 14 : _days.Count > 14 ? 7 : 1;
+        if (morphing) dc.PushOpacity((m - .5) * 2);
         for (var i = _days.Count - 1; i >= 0; i -= step)
         {
             var text = ChartInk.Text(this, _days.Count > 14 ? _days[i].Date.ToString("MMM d") : _days[i].Date.ToString("ddd"), 10, t.Faint);
             dc.DrawText(text, new Point(Math.Clamp(i * slot + slot / 2 - text.Width / 2, 0, ActualWidth - text.Width), ActualHeight - Bottom + 6));
         }
+        if (morphing) dc.Pop();
     }
 }
 
@@ -116,6 +176,8 @@ public sealed class CalendarGrid : FrameworkElement
     private IReadOnlyList<DayUsage> _days = [];
     private int? _hover;
     public Color Accent { get; set; } = Accents.FromArgb(DesignTokens.Live);
+    /// <summary>Days with a note get a small dot in their corner.</summary>
+    public IReadOnlySet<DateTime> Notes { get; set; } = new HashSet<DateTime>();
     public event Action<DayUsage>? DayClicked;
     public CalendarGrid()
     {
@@ -162,6 +224,7 @@ public sealed class CalendarGrid : FrameworkElement
             if (d.Used is not { } used) { dc.DrawRoundedRectangle(null, ChartInk.Dashed(Palette.Alpha(t.Faint, .45)), r, radius, radius); continue; }
             var level = used <= .0001 ? .08 : .25 + .75 * Math.Sqrt(used / max);
             dc.DrawRoundedRectangle(Palette.Frozen(Palette.Alpha(Accent, level)), _hover == i ? new Pen(Palette.Frozen(t.Ink), 1.2) : null, r, radius, radius);
+            if (Notes.Contains(d.Date)) dc.DrawEllipse(Palette.Frozen(t.Ink), new Pen(Palette.Frozen(t.Background), 1), new Point(r.Right - 2.5, r.Top + 2.5), 2.6, 2.6);
         }
     }
 }

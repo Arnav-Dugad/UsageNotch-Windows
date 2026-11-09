@@ -20,6 +20,8 @@ public partial class StatsDashboard : System.Windows.Controls.UserControl
     private readonly StackPanel _page = new() { MaxWidth = 1180, Margin = new Thickness(28, 8, 28, 40) };
     private readonly WrapPanel _rings = new() { HorizontalAlignment = HorizontalAlignment.Center };
     private readonly StackPanel _incidents = new();
+    private readonly ContentControl _score = new();
+    private string _scoreSignature = "";
     private readonly WrapPanel _cards = new();
     private readonly TextBlock _subtitle = Ui.Text("", 13, FontWeights.Normal, "Ui.Muted", false);
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -39,7 +41,7 @@ public partial class StatsDashboard : System.Windows.Controls.UserControl
         var title = Ui.Text("Overview", 30, FontWeights.SemiBold, "Ui.Text", false);
         _subtitle.Margin = new Thickness(0, 4, 0, 18);
         var hero = Ui.Card(_rings, null, DesignTokens.Radius.Card, new Thickness(18, 22, 18, 16));
-        _page.Children.Add(title); _page.Children.Add(_subtitle); _page.Children.Add(_incidents); _page.Children.Add(hero);
+        _page.Children.Add(title); _page.Children.Add(_subtitle); _page.Children.Add(_incidents); _page.Children.Add(_score); _page.Children.Add(hero);
         _page.Children.Add(Ui.Label("Your providers"));
         _page.Children.Add(_cards);
         var note = Ui.Text("Private, local history · kept without automatic expiry. Missing readings never mean inactivity.", 11.5, FontWeights.Normal, "Ui.Faint");
@@ -101,6 +103,8 @@ public partial class StatsDashboard : System.Windows.Controls.UserControl
             view.Secondary.Text = p.WeeklyWindow is { } w && w != p.PrimaryWindow ? $"{(ProviderKind.HasWeekly(p.Id) ? "7d" : "2nd")} {Ui.Percent(w.UsedFraction is { } u ? (p.ShowRemaining ? 1 - u : u) : null)}" : p.PrimaryWindow?.Label ?? p.HeadlineLabel;
         }
 
+        _ = RefreshScore();
+
         _cards.Children.Clear();
         var i = 0;
         foreach (var p in items)
@@ -113,6 +117,20 @@ public partial class StatsDashboard : System.Windows.Controls.UserControl
         LayoutCards();
         if (_detail is not null && items.FirstOrDefault(p => p.Id == _detailId) is not null) _detail.Update();
         else if (_detail is not null) CloseDetail();
+    }
+
+    /// <summary>The usage score card; rebuilt (and re-animated) only when its numbers change.</summary>
+    private async Task RefreshScore()
+    {
+        if (_coordinator is null) return;
+        Ui.EnsureContext(this);
+        var coordinator = _coordinator;
+        var score = await Task.Run(() => coordinator.Score());
+        var signature = score is null ? "" : $"{score.Value}|{score.Previous}|{string.Join(",", score.Providers.Select(p => p.Id + Math.Round(p.Used * 100)))}|{Theme.Current.Dark}{Theme.Classic}";
+        if (signature == _scoreSignature) return;
+        _scoreSignature = signature;
+        _score.Content = score is null || score.Providers.Count < 1 ? null : ScoreCard.Build(score, coordinator.Items.ToList(), Reduced);
+        if (_score.Content is UIElement card && !Reduced) Motion.Rise(card, 0, Reduced);
     }
 
     private void LayoutCards()

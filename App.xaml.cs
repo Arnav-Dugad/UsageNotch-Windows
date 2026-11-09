@@ -15,6 +15,8 @@ public partial class App : System.Windows.Application
     private System.Drawing.Icon? _trayIcon;
     private System.Drawing.Icon? _liveIcon;
     private string? _liveKey;
+    private double? _lastTrayUsed;
+    private System.Windows.Threading.DispatcherTimer? _pulse;
     private System.Windows.Forms.ToolStripMenuItem? _autoHideItem;
     private System.Windows.Forms.ToolStripMenuItem? _compactItem;
     private System.Windows.Forms.ToolStripMenuItem? _clickThroughItem;
@@ -29,6 +31,8 @@ public partial class App : System.Windows.Application
     public Services.Phone.PhoneLinkService? Phone { get; private set; }
     /// <summary>Raised on the UI thread after a phone changed budgets, colours, names, order or alert settings.</summary>
     public event Action? SharedSettingsChanged;
+    /// <summary>Raised on the UI thread after a phone added, changed or deleted a day note.</summary>
+    public event Action? NotesChanged;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -289,7 +293,9 @@ public partial class App : System.Windows.Application
         _coordinator.Refreshed += () => phone.Update(_coordinator.Items.Select(item => item.Snapshot).ToList());
         phone.RefreshRequested = coordinator.RefreshForPhoneAsync;
         phone.ExtrasProvider = () => new Services.Phone.PhoneSnapshot.Extras(false, coordinator.TokenReports(), coordinator.Health.Active, settings.ShareProjectsWithPhone,
-            Report: coordinator.WeekReportFor(settings.ShareProjectsWithPhone), AllTime: coordinator.AllTimeFor);
+            Report: coordinator.WeekReportFor(settings.ShareProjectsWithPhone), AllTime: coordinator.AllTimeFor,
+            Score: coordinator.Score(), Facts: coordinator.FactsFor, ProjectBudgets: settings.ProjectBudgets);
+        phone.NotesChanged += () => { coordinator.NotesChanged(); Dispatcher.BeginInvoke(() => NotesChanged?.Invoke()); };
         phone.SettingsReceived = shared => Dispatcher.Invoke(() =>
         {
             var now = DateTimeOffset.UtcNow;
@@ -325,6 +331,10 @@ public partial class App : System.Windows.Application
             var primary = _settings.LiveTrayIcon ? Services.TrayRing.Primary(_coordinator.Items) : null;
             var dark = Services.TrayRing.TaskbarDark();
             var key = primary is null ? null : $"{Math.Round(primary.UsedFraction!.Value * 100)}|{_settings.ShowRemaining}|{dark}";
+            // Crossing your warning level: the ring glows three times, without taking focus or making a sound.
+            var warn = Math.Clamp(_settings.AlertWarnPercent, 1, 100) / 100d;
+            if (primary?.UsedFraction is { } now && _lastTrayUsed is { } before && before < warn && now >= warn) Pulse(now, dark);
+            _lastTrayUsed = primary?.UsedFraction;
             if (key == _liveKey) return;
             var old = _liveIcon;
             _liveIcon = primary is null ? null : Services.TrayRing.Draw(primary.UsedFraction!.Value, _settings.ShowRemaining, dark);
@@ -333,6 +343,28 @@ public partial class App : System.Windows.Application
             old?.Dispose();
         }
         catch { }
+    }
+
+    private void Pulse(double used, bool dark)
+    {
+        if (_tray is null || _settings is null) return;
+        _pulse?.Stop();
+        var frame = 0; const int frames = 36; // three pulses of 12 frames, 50 ms apart
+        _pulse = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        _pulse.Tick += (_, _) =>
+        {
+            if (_tray is null || _settings is null) { _pulse?.Stop(); return; }
+            var old = _liveIcon;
+            if (++frame > frames)
+            {
+                _pulse!.Stop();
+                _liveIcon = Services.TrayRing.Draw(used, _settings.ShowRemaining, dark);
+            }
+            else _liveIcon = Services.TrayRing.Draw(used, _settings.ShowRemaining, dark, frame % 12 / 12d);
+            _tray.Icon = _liveIcon;
+            old?.Dispose();
+        };
+        _pulse.Start();
     }
 
     public void ApplySettings(AppSettings settings)

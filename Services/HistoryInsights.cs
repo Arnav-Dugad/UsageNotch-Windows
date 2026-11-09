@@ -144,6 +144,47 @@ public static class HistoryInsights
     /// <summary>Unused capacity of the finished periods in a span, as an average fraction, or null with no finished period.</summary>
     public static double? AverageUnused(IReadOnlyList<UnusedPeriod> unused) => unused.Count == 0 ? null : unused.Average(u => 1 - u.Peak);
 
+    private static double Median(IEnumerable<double> values)
+    {
+        var v = values.Order().ToArray();
+        return v.Length == 0 ? 0 : v.Length % 2 == 1 ? v[v.Length / 2] : (v[v.Length / 2 - 1] + v[v.Length / 2]) / 2;
+    }
+
+    /// <summary>
+    /// Your typical week before <paramref name="from"/>: the median total of up to 8 earlier 7-day blocks that have readings
+    /// on at least 3 days, or null with fewer than 3 such blocks.
+    /// </summary>
+    public static double? TypicalWeek(IReadOnlyList<DayUsage> calendar, DateTime from)
+    {
+        var byDate = calendar.ToDictionary(d => d.Date);
+        var totals = new List<double>();
+        for (var k = 1; k <= 8; k++)
+        {
+            var days = Enumerable.Range(0, 7).Select(i => byDate.GetValueOrDefault(from.AddDays(-7 * k + i))).Where(d => d?.Used is not null).ToList();
+            if (days.Count >= 3) totals.Add(days.Sum(d => d!.Used!.Value));
+        }
+        return totals.Count >= 3 ? Math.Round(Median(totals), 4) : null;
+    }
+
+    /// <summary>
+    /// Days in the last <paramref name="days"/> whose usage was at least 1.8× the median of the same weekday over the 8 weeks
+    /// before (at least 3 of them with readings, median ≥ 0.05), oldest first.
+    /// </summary>
+    public static IReadOnlyList<UnusualDay> Unusual(IReadOnlyList<DayUsage> calendar, int days = 30)
+    {
+        var byDate = calendar.ToDictionary(d => d.Date);
+        var result = new List<UnusualDay>();
+        foreach (var d in calendar.TakeLast(days))
+        {
+            if (d.Used is not { } used || used < .05) continue;
+            var samples = Enumerable.Range(1, 8).Select(k => byDate.GetValueOrDefault(d.Date.AddDays(-7 * k))?.Used).Where(u => u is not null).Select(u => u!.Value).ToList();
+            if (samples.Count < 3) continue;
+            var typical = Median(samples);
+            if (typical >= .05 && used / typical >= 1.8) result.Add(new UnusualDay(d.Date, Math.Round(used / typical, 2), Math.Round(typical, 4)));
+        }
+        return result;
+    }
+
     /// <summary>
     /// All-time totals from a stream of readings, oldest first, using the same counting as the daily totals: rises between
     /// readings, usage after a renewal, and nothing for small rounding drops.

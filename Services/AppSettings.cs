@@ -83,6 +83,8 @@ public sealed class AppSettings
     public int QuietEndHour { get; set; } = 8;
     public DateTimeOffset? AlertsSnoozedUntil { get; set; }
     public Dictionary<string, int> AlertState { get; set; } = new();
+    /// <summary>Weekly token budgets per project, keyed "source|project" (Claude Code's "claude|UsageNotch-Windows"). Synced with phones.</summary>
+    public Dictionary<string, long> ProjectBudgets { get; set; } = new();
 
     // Providers
     public bool ClaudeEnabled { get; set; } = true;

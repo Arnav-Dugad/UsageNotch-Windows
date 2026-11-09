@@ -15,9 +15,28 @@ public sealed record TokenTotals(long Input, long Output, long CacheRead, long C
 }
 public sealed record TokenShare(string Name, long Total, double? Cost, double Share);
 public sealed record TokenDay(DateTime Date, long Total, double? Cost);
+/// <summary>One 7-day block's tokens by model: the biggest models and "Other".</summary>
+public sealed record ModelWeek(DateTime Start, IReadOnlyList<TokenShare> Models);
 public sealed record TokenReport(string Source, string Label, TokenTotals Today, TokenTotals Week, IReadOnlyList<TokenDay> Days,
-    IReadOnlyList<TokenShare> Projects, IReadOnlyList<TokenShare> Models, long[] TodayHours, bool AllDevices = false, long? Lifetime = null, long? PeakDaily = null, int? LongestStreak = null)
+    IReadOnlyList<TokenShare> Projects, IReadOnlyList<TokenShare> Models, long[] TodayHours, bool AllDevices = false, long? Lifetime = null, long? PeakDaily = null, int? LongestStreak = null,
+    TokenTotals? Month = null, DateTime? MonthFrom = null, IReadOnlyList<ModelWeek>? ModelWeeks = null)
 {
+    /// <summary>The 5 biggest models over 8 weeks; the rest are "Other".</summary>
+    public static IReadOnlyList<ModelWeek> Weeks(Dictionary<(int Block, string Model), long> byBlock, DateTime today)
+    {
+        var top = byBlock.GroupBy(e => e.Key.Model).Select(g => (Model: g.Key, Total: g.Sum(e => e.Value))).OrderByDescending(x => x.Total).Take(5).Select(x => x.Model).ToHashSet();
+        var weeks = new List<ModelWeek>();
+        for (var block = 7; block >= 0; block--)
+        {
+            var models = byBlock.Where(e => e.Key.Block == block).GroupBy(e => top.Contains(e.Key.Model) ? e.Key.Model : "Other")
+                .Select(g => (Name: g.Key, Total: g.Sum(e => e.Value))).Where(x => x.Total > 0).ToList();
+            var sum = models.Sum(m => m.Total);
+            weeks.Add(new ModelWeek(today.AddDays(-6 - 7 * block), models.OrderBy(m => m.Name == "Other").ThenByDescending(m => m.Total)
+                .Select(m => new TokenShare(m.Name, m.Total, null, sum > 0 ? (double)m.Total / sum : 0)).ToArray()));
+        }
+        return weeks;
+    }
+
     /// <summary>
     /// Replaces totals with the provider's own account-wide counts (every device, not just this PC's transcripts). Projects
     /// and models stay from this PC, since the provider doesn't break them down.
@@ -28,8 +47,11 @@ public sealed record TokenReport(string Source, string Label, TokenTotals Today,
         var byDate = account.Days.GroupBy(d => d.Date.Date).ToDictionary(g => g.Key, g => g.Sum(x => x.Tokens));
         var days = Enumerable.Range(0, 30).Select(i => today.AddDays(i - 29)).Select(d => new TokenDay(d, byDate.GetValueOrDefault(d), null)).ToArray();
         var todayTotal = byDate.GetValueOrDefault(today); var week = days.TakeLast(7).Sum(d => d.Total);
+        var monthFrom = new DateTime(today.Year, today.Month, 1);
+        var month = byDate.Where(e => e.Key >= monthFrom && e.Key <= today).Sum(e => e.Value);
         return new TokenReport(source, label, new TokenTotals(todayTotal, 0, 0, 0, null), new TokenTotals(week, 0, 0, 0, null), days,
-            local?.Projects ?? [], local?.Models ?? [], local?.TodayHours ?? new long[24], true, account.Lifetime, account.PeakDaily, account.LongestStreak);
+            local?.Projects ?? [], local?.Models ?? [], local?.TodayHours ?? new long[24], true, account.Lifetime, account.PeakDaily, account.LongestStreak,
+            new TokenTotals(month, 0, 0, 0, null), monthFrom, local?.ModelWeeks);
     }
 }
 
@@ -283,23 +305,29 @@ public sealed class LocalTokenUsage
     }
 
     /// <summary>Totals for today, the last 7 days and 30 days of one source, in local time.</summary>
-    public TokenReport? Report(Source source, DateTimeOffset now)
+    public TokenReport? Report(Source source, DateTimeOffset now, IReadOnlySet<string>? keep = null)
     {
         try
         {
             using var db = Open(); using var cmd = db.CreateCommand();
             cmd.CommandText = "SELECT project,model,hour,input,output,cache_read,write5,write60 FROM usage WHERE source=$s AND hour >= $h";
             cmd.Parameters.AddWithValue("$s", source.Id);
-            cmd.Parameters.AddWithValue("$h", now.AddDays(-31).ToUnixTimeSeconds() / 3600);
             var today = now.ToLocalTime().Date; var weekFrom = today.AddDays(-6);
+            var monthFrom = new DateTime(today.Year, today.Month, 1); var blocksFrom = today.AddDays(-55);
+            var since = new DateTimeOffset(monthFrom < blocksFrom ? monthFrom : blocksFrom);
+            cmd.Parameters.AddWithValue("$h", Math.Min(now.AddDays(-31).ToUnixTimeSeconds(), since.ToUnixTimeSeconds()) / 3600);
+            var month = TokenTotals.Zero; var byBlock = new Dictionary<(int, string), long>();
             var days = new Dictionary<DateTime, TokenTotals>(); var projects = new Dictionary<string, TokenTotals>(); var models = new Dictionary<string, TokenTotals>();
             var todayTotals = TokenTotals.Zero; var week = TokenTotals.Zero; var hours = new long[24]; var any = false;
             using (var r = cmd.ExecuteReader())
                 while (r.Read())
                 {
-                    any = true;
                     var model = r.GetString(1); var local = DateTimeOffset.FromUnixTimeSeconds(r.GetInt64(2) * 3600).ToLocalTime();
                     var totals = ModelPricing.Totals(model, r.GetInt64(3), r.GetInt64(4), r.GetInt64(5), r.GetInt64(6), r.GetInt64(7), source.Codex);
+                    if (local.Date >= monthFrom && local.Date <= today) month = month.Add(totals);
+                    if (local.Date >= blocksFrom && local.Date <= today) { var key = ((today - local.Date).Days / 7, model); byBlock[key] = byBlock.GetValueOrDefault(key) + totals.Total; }
+                    if (local.Date < today.AddDays(-30)) continue;
+                    any = true;
                     days[local.Date] = days.GetValueOrDefault(local.Date, TokenTotals.Zero).Add(totals);
                     if (local.Date == today) { todayTotals = todayTotals.Add(totals); hours[local.Hour] += totals.Total; }
                     if (local.Date >= weekFrom)
@@ -310,17 +338,20 @@ public sealed class LocalTokenUsage
                     }
                 }
             if (!any) return null;
-            IReadOnlyList<TokenShare> Top(Dictionary<string, TokenTotals> map, int count) => map.OrderByDescending(e => e.Value.Total).Take(count)
+            // The biggest projects, plus any project with a budget, so its budget can always be checked.
+            IReadOnlyList<TokenShare> Top(Dictionary<string, TokenTotals> map, int count) => map.OrderByDescending(e => e.Value.Total).Where((e, i) => i < count || keep?.Contains(e.Key) == true)
                 .Select(e => new TokenShare(e.Key, e.Value.Total, e.Value.Cost, week.Total > 0 ? (double)e.Value.Total / week.Total : 0)).ToArray();
             var series = Enumerable.Range(0, 30).Select(i => today.AddDays(i - 29))
                 .Select(d => days.TryGetValue(d, out var v) ? new TokenDay(d, v.Total, v.Cost) : new TokenDay(d, 0, source.Codex ? null : 0)).ToArray();
-            return new TokenReport(source.Id, source.Label, todayTotals, week, series, Top(projects, 8), Top(models, 6), hours);
+            return new TokenReport(source.Id, source.Label, todayTotals, week, series, Top(projects, 8), Top(models, 6), hours,
+                Month: month, MonthFrom: monthFrom, ModelWeeks: TokenReport.Weeks(byBlock, today));
         }
         catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException) { return null; }
     }
 
     public IReadOnlyList<TokenReport> Reports(AppSettings settings, DateTimeOffset now) =>
-        !settings.TrackLocalTokens ? [] : SourcesFor(settings).Select(s => Report(s, now)).Where(r => r is not null).Select(r => r!).ToArray();
+        !settings.TrackLocalTokens ? [] : SourcesFor(settings).Select(s => Report(s, now, settings.ProjectBudgets.Keys.Where(k => k.StartsWith(s.Id + "|")).Select(k => k[(s.Id.Length + 1)..]).ToHashSet()))
+            .Where(r => r is not null).Select(r => r!).ToArray();
 
     public long DatabaseBytes() { try { return new FileInfo(_path).Exists ? new FileInfo(_path).Length : 0; } catch { return 0; } }
 

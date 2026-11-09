@@ -229,7 +229,61 @@ public partial class SettingsWindow
             stack.Children.Add(card);
         }
         if (stack.Children.Count == 0) stack.Children.Add(Ui.Card(Ui.Text("Budgets appear once a provider reports its limits.", 12.5, FontWeights.Normal, "Ui.Muted")));
+        stack.Children.Add(ProjectBudgetsEditor());
         return stack;
+    }
+
+    /// <summary>Weekly token budgets for your projects, from the token counts this PC keeps. Saved at once and synced with your phone.</summary>
+    private UIElement ProjectBudgetsEditor()
+    {
+        var body = new StackPanel();
+        var head = Ui.Row(10, Ui.Icon("\uE8EF", 18, "Ui.Muted"), Ui.Text("Project token budgets", 15, FontWeights.SemiBold, "Ui.Text", false));
+        var intro = Ui.Text("Set a weekly budget for a project in millions of tokens. You'll see its progress under Tokens and get an alert at 80% and when it's passed (last 7 days).", 12, FontWeights.Normal, "Ui.Muted");
+        intro.Margin = new Thickness(0, 6, 0, 12);
+        body.Children.Add(head); body.Children.Add(intro);
+        var list = new StackPanel(); body.Children.Add(list);
+        list.Children.Add(Ui.Text("Reading your projects…", 12.5, FontWeights.Normal, "Ui.Muted"));
+        async void Load()
+        {
+            Ui.EnsureContext(this);
+            var coordinator = _coordinator!;
+            var reports = await Task.Run(() => coordinator.TokenReports(fresh: true));
+            list.Children.Clear();
+            if (!_settings.TrackLocalTokens) { list.Children.Add(Ui.Text("Turn on token counting in Settings → Data to set project budgets.", 12.5, FontWeights.Normal, "Ui.Muted")); return; }
+            var any = false;
+            foreach (var r in reports)
+                foreach (var project in r.Projects)
+                {
+                    any = true;
+                    var key = r.Source + "|" + project.Name;
+                    var current = _settings.ProjectBudgets.GetValueOrDefault(key);
+                    var box = new System.Windows.Controls.TextBox { Width = 90, Text = current > 0 ? (current / 1e6).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : "", HorizontalContentAlignment = HorizontalAlignment.Right };
+                    box.SetResourceReference(StyleProperty, "Field");
+                    System.Windows.Automation.AutomationProperties.SetName(box, $"Weekly budget for {project.Name} in millions of tokens");
+                    var status = Ui.Text(current > 0 ? $"{Ui.Tokens(project.Total)} of {Ui.Tokens(current)} this week" : $"{Ui.Tokens(project.Total)} this week", 11.5, FontWeights.Normal, "Ui.Muted", false);
+                    void Save()
+                    {
+                        var text = box.Text.Trim();
+                        if (text.Length == 0) { Persist(s => s.ProjectBudgets.Remove(key)); status.Text = "No budget"; return; }
+                        if (!double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var millions) || millions * 1e6 < SharedSettings.MinProjectBudget || millions * 1e6 > SharedSettings.MaxProjectBudget)
+                        { status.Text = "Enter millions of tokens, from 0.1 to 1000000"; return; }
+                        var tokens = (long)Math.Round(millions * 1e6);
+                        Persist(s => s.ProjectBudgets[key] = tokens);
+                        status.Text = $"Saved · {Ui.Tokens(project.Total)} of {Ui.Tokens(tokens)} this week";
+                    }
+                    box.LostKeyboardFocus += (_, _) => Save();
+                    box.KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) Save(); };
+                    var name = Ui.Stack(Ui.Text(project.Name, 13, FontWeights.SemiBold, "Ui.Text", false), Ui.Text(r.Label, 11.5, FontWeights.Normal, "Ui.Faint", false));
+                    var unit = Ui.Text("M tokens / week", 12, FontWeights.Normal, "Ui.Muted", false); unit.VerticalAlignment = VerticalAlignment.Center; unit.Margin = new Thickness(8, 0, 0, 0);
+                    status.VerticalAlignment = VerticalAlignment.Center; status.Margin = new Thickness(16, 0, 0, 0);
+                    var row = Ui.Columns((name, new GridLength(1, GridUnitType.Star)), (box, GridLength.Auto), (unit, GridLength.Auto), (status, new GridLength(210)));
+                    var inner = Ui.Inner(row, new Thickness(14, 10, 14, 10)); inner.Margin = new Thickness(0, 0, 0, 8);
+                    list.Children.Add(inner);
+                }
+            if (!any) list.Children.Add(Ui.Text("Projects appear after Claude Code or Codex has been used on this PC in the last 7 days.", 12.5, FontWeights.Normal, "Ui.Muted"));
+        }
+        Load();
+        return Ui.Card(body);
     }
 
     private UIElement OrderEditor()
@@ -370,7 +424,7 @@ public partial class SettingsWindow
             var (_, counts, _) = await Task.Run(() => { lock (history) return (0L, history.Counts(), 0L); });
             var since = counts.Since is { } first ? $" since {first.ToLocalTime():MMM d, yyyy}" : "";
             var answer = System.Windows.MessageBox.Show(this,
-                $"Delete all {counts.Readings:N0} readings{since} from this PC?\n\nHistory, all-time totals and This week start again from the next reading. Live usage keeps working. Your phone keeps its own copy until you delete it there.\n\nThis can't be undone. To keep a copy, choose Export CSV first.",
+                $"Delete all {counts.Readings:N0} readings{since}, your day notes and plan history from this PC?\n\nHistory, all-time totals and This week start again from the next reading. Live usage keeps working. Your phone keeps its own copy until you delete it there.\n\nThis can't be undone. To keep a copy, choose Export CSV first.",
                 "Delete usage history", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
             if (answer != MessageBoxResult.Yes) return;
             message.Text = "Deleting…";

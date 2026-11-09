@@ -174,6 +174,7 @@ internal static class Program
         PlanningChecks.Run();
         LayoutChecks.Run();
         ReportChecks.Run(Path.Combine(Environment.CurrentDirectory, "Diagnostics", "Artifacts", "Report"));
+        Checks29.Run(Path.Combine(Environment.CurrentDirectory, "Diagnostics", "Artifacts", "Report"));
         WorkspaceChecks.Run();
         UpgradeChecks.Run();
         CheckClaudeCooldown();

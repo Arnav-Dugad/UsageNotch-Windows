@@ -18,14 +18,15 @@ namespace UsageNotch.Services.Phone;
 /// </summary>
 public sealed class PhoneServer : IAsyncDisposable
 {
-    public const int MaxSettingsBytes = 32 * 1024;
+    public const int MaxSettingsBytes = 32 * 1024, MaxNotesBytes = 64 * 1024;
     private WebApplication? _app;
     private readonly PhoneIdentity _identity;
     private readonly Func<bool, string> _snapshot;
     private readonly Func<Task<string>>? _refresh;
     private readonly Func<string, string?>? _settings;
-    public PhoneServer(PhoneIdentity identity, Func<bool, string> snapshot, Func<Task<string>>? refresh = null, Func<string, string?>? settings = null)
-    { _identity = identity; _snapshot = snapshot; _refresh = refresh; _settings = settings; }
+    private readonly Func<string, string?>? _notes;
+    public PhoneServer(PhoneIdentity identity, Func<bool, string> snapshot, Func<Task<string>>? refresh = null, Func<string, string?>? settings = null, Func<string, string?>? notes = null)
+    { _identity = identity; _snapshot = snapshot; _refresh = refresh; _settings = settings; _notes = notes; }
     public PhoneServer(PhoneIdentity identity, Func<string> snapshot) : this(identity, _ => snapshot()) { }
     public async Task Start(int port = PhoneIdentity.Port, bool loopbackOnly = false)
     {
@@ -33,7 +34,7 @@ public sealed class PhoneServer : IAsyncDisposable
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(options =>
         {
-            options.AddServerHeader = false; options.Limits.MaxRequestBodySize = MaxSettingsBytes;
+            options.AddServerHeader = false; options.Limits.MaxRequestBodySize = MaxNotesBytes;
             options.Limits.MaxRequestHeadersTotalSize = 8192; options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(5);
             options.Limits.MaxConcurrentConnections = 16; options.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(5);
             options.Listen(loopbackOnly ? IPAddress.Loopback : IPAddress.Any, port, listen => listen.UseHttps(_identity.Certificate));
@@ -51,6 +52,7 @@ public sealed class PhoneServer : IAsyncDisposable
                 ("GET", "/v1/snapshot") => "snapshot",
                 ("POST", "/v1/refresh") when _refresh != null => "refresh",
                 ("PUT", "/v1/settings") when _settings != null => "settings",
+                ("PUT", "/v1/notes") when _notes != null => "notes",
                 _ => null
             };
             if (route == null || context.Request.QueryString.HasValue) { context.Response.StatusCode = 404; return; }
@@ -68,11 +70,13 @@ public sealed class PhoneServer : IAsyncDisposable
                         json = _snapshot(detailed);
                         break;
                     case "settings":
+                    case "notes":
                         if (!(context.Request.ContentType ?? "").StartsWith("application/json", StringComparison.OrdinalIgnoreCase)) { context.Response.StatusCode = 415; return; }
                         using (var reader = new StreamReader(context.Request.Body, Encoding.UTF8))
                         {
                             var body = await reader.ReadToEndAsync(context.RequestAborted);
-                            json = _settings!(body);
+                            if (route == "settings" && Encoding.UTF8.GetByteCount(body) > MaxSettingsBytes) { context.Response.StatusCode = 413; return; }
+                            json = route == "settings" ? _settings!(body) : _notes!(body);
                         }
                         if (json == null) { context.Response.StatusCode = 400; return; }
                         break;
@@ -129,6 +133,8 @@ public sealed class PhoneLinkService : IAsyncDisposable
     public Func<Task<string>>? RefreshRequested { get; set; }
     /// <summary>Merges a phone's shared settings (PUT /v1/settings) and returns the merged map, or null when invalid.</summary>
     public Func<System.Text.Json.Nodes.JsonObject, System.Text.Json.Nodes.JsonObject?>? SettingsReceived { get; set; }
+    /// <summary>Raised after a phone's notes changed this PC's notes.</summary>
+    public event Action? NotesChanged;
     /// <summary>Local token history and status-page incidents to include in snapshots.</summary>
     public Func<PhoneSnapshot.Extras>? ExtrasProvider { get; set; }
     private bool _disposed;
@@ -219,13 +225,37 @@ public sealed class PhoneLinkService : IAsyncDisposable
         catch (JsonException) { return null; }
     }
 
+    /// <summary>Merges a phone's day notes (PUT /v1/notes) by time and returns every note, or null when the body is invalid.</summary>
+    public string? MergeNotes(string body)
+    {
+        try
+        {
+            if (System.Text.Json.Nodes.JsonNode.Parse(body) is not System.Text.Json.Nodes.JsonObject root || root["notes"] is not System.Text.Json.Nodes.JsonArray list || list.Count > 1000) return null;
+            var incoming = new List<DayNote>();
+            foreach (var item in list)
+            {
+                if (item is not System.Text.Json.Nodes.JsonObject o || o["date"] is not System.Text.Json.Nodes.JsonValue dv || !dv.TryGetValue<string>(out var date)
+                    || o["text"] is not System.Text.Json.Nodes.JsonValue tv || !tv.TryGetValue<string>(out var text) || text.Length > 400
+                    || o["at"] is not System.Text.Json.Nodes.JsonValue av || !av.TryGetValue<long>(out var at)) return null;
+                if (!DateTime.TryParseExact(date, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var day)) return null;
+                incoming.Add(new DayNote(day, DayNote.Clean(text), at));
+            }
+            bool changed;
+            lock (_history) changed = _history.MergeNotes(incoming, DateTimeOffset.UtcNow);
+            if (changed) { _served = null; NotesChanged?.Invoke(); }
+            var all = PhoneSnapshot.NotesFor(_history) ?? [];
+            return System.Text.Json.JsonSerializer.Serialize(new { notes = all }, PhoneSnapshot.Json);
+        }
+        catch (JsonException) { return null; }
+    }
+
     public async Task<bool> StartAsync(int port = PhoneIdentity.Port, bool loopbackOnly = false)
     {
         await _gate.WaitAsync();
         try
         {
             if (_server != null || _disposed) return _server != null;
-            var server = new PhoneServer(EnsureIdentity(), Serve, Refresh, MergeSettings);
+            var server = new PhoneServer(EnsureIdentity(), Serve, Refresh, MergeSettings, MergeNotes);
             try { await server.Start(port, loopbackOnly); }
             catch
             {

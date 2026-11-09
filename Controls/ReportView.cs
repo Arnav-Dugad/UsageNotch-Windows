@@ -13,7 +13,7 @@ namespace UsageNotch.Controls;
 public static class ReportView
 {
     /// <summary>The weekly report: a headline, one row per provider against the week before, and the week in sentences.</summary>
-    public static Border Card(WeekReport r, IReadOnlyList<ProviderViewModel> items, AppSettings s, bool reduced, Action<TextBlock>? share = null)
+    public static Border Card(WeekReport r, IReadOnlyList<ProviderViewModel> items, AppSettings s, bool reduced, Action<TextBlock>? share = null, UsageScore? score = null)
     {
         var stack = new StackPanel();
         var title = Ui.Columns((Ui.Icon("", 15, "Ui.Muted", new Thickness(0, 0, 10, 0)), GridLength.Auto),
@@ -21,25 +21,59 @@ public static class ReportView
             (Ui.Text(r.Summary, DesignTokens.TypeScale.Caption, FontWeights.Normal, "Ui.Faint", false), GridLength.Auto));
         title.Margin = new Thickness(0, 0, 0, 10);
         stack.Children.Add(title);
-        var headline = Ui.Text(r.Headline, 24, FontWeights.Light); headline.Margin = new Thickness(0, 0, 0, 14);
-        stack.Children.Add(headline);
+        // The headline, with your usage score counting up beside it.
+        var headline = Ui.Text(r.Headline, 24, FontWeights.Light);
+        UIElement scoreView = new Border();
+        if (score is not null)
+        {
+            var number = new CountUpText { Target = score.Value, Reduced = reduced, FontSize = 24, FontWeight = FontWeights.Light, FontFamily = Ui.Display, HorizontalAlignment = HorizontalAlignment.Right };
+            number.SetResourceReference(TextBlock.ForegroundProperty, "Ui.Text");
+            var caption = Ui.Text("usage score", DesignTokens.TypeScale.Caption, FontWeights.Normal, "Ui.Faint", false); caption.HorizontalAlignment = HorizontalAlignment.Right;
+            scoreView = Ui.Stack(number, caption);
+            ((FrameworkElement)scoreView).ToolTip = "The average of how much of each provider's weekly limit you've used. See Overview.";
+        }
+        var top = Ui.Columns((headline, new GridLength(1, GridUnitType.Star)), (scoreView, GridLength.Auto)); top.Margin = new Thickness(0, 0, 0, r.Note is null ? 14 : 6);
+        stack.Children.Add(top);
+        if (r.Note is { } note)
+        {
+            var info = Ui.Columns((Ui.Icon("\uE946", 13, "Ui.Faint", new Thickness(0, 1, 8, 0)), GridLength.Auto), (Ui.Text(note, DesignTokens.TypeScale.Caption, FontWeights.Normal, "Ui.Faint"), new GridLength(1, GridUnitType.Star)));
+            info.Margin = new Thickness(0, 0, 0, 14);
+            stack.Children.Add(info);
+        }
 
+        var index = 0;
         foreach (var row in r.Providers)
         {
             var p = items.FirstOrDefault(i => i.Id == row.Id);
             var accent = p?.AccentColor ?? Palette.Accent;
-            var name = Ui.Stack(Ui.Text(row.Name, DesignTokens.TypeScale.Body, FontWeights.SemiBold, "Ui.Text", false),
-                Ui.Text(row.Label + (row.Hits > 0 ? $" · limit reached {Times(row.Hits)}" : ""), DesignTokens.TypeScale.Caption, FontWeights.Normal, "Ui.Muted", false));
-            var value = Ui.Text(Ui.Limits(row.Used), 22, FontWeights.Light, "Ui.Text", false); value.HorizontalAlignment = HorizontalAlignment.Right;
+            var delay = TimeSpan.FromMilliseconds(160 * index++);
+            // A ring per provider: this week against your typical week (a full ring), or the week before when there's no typical week yet.
+            var basis = row.Typical is >= .05 ? row.Typical : row.Previous is >= .05 ? row.Previous : null;
+            FrameworkElement badge;
+            if (basis is { } b && row.Used is { } u)
+            {
+                var ring = new ArcRing { Width = 40, Height = 40, Value = u / b, Ink = accent, Thickness = 4.5, Delay = delay, Reduced = reduced };
+                var mark = Ui.Logo(row.Id, 16, s.ColoredLogos); mark.HorizontalAlignment = HorizontalAlignment.Center; mark.VerticalAlignment = VerticalAlignment.Center;
+                var g = new Grid { Width = 40, Height = 40 }; g.Children.Add(ring); g.Children.Add(mark);
+                g.ToolTip = row.Typical is >= .05 ? $"This week is {Math.Round(u / b * 100):0}% of your typical week (a full ring)" : $"This week is {Math.Round(u / b * 100):0}% of the week before (a full ring)";
+                badge = g;
+            }
+            else badge = Ui.LogoTile(row.Id, 40);
+            badge.Margin = new Thickness(0, 0, 12, 0); badge.VerticalAlignment = VerticalAlignment.Center;
+            var details = row.Label + (row.Hits > 0 ? $" · limit reached {Times(row.Hits)}" : "");
+            var name = Ui.Stack(Ui.Text(row.Name, DesignTokens.TypeScale.Body, FontWeights.SemiBold, "Ui.Text", false), Ui.Text(details, DesignTokens.TypeScale.Caption, FontWeights.Normal, "Ui.Muted", false));
+            if (row.Typical is { } typical) name.Children.Add(Ui.Text($"Typical week: {Ui.Limits(typical)}", DesignTokens.TypeScale.Caption, FontWeights.Normal, "Ui.Faint", false));
+            var value = new CountUpText { Target = row.Used ?? 0, Format = v => row.Used is null ? "—" : Ui.Limits(v), Delay = delay, Reduced = reduced, FontSize = 22, FontWeight = FontWeights.Light, FontFamily = Ui.Display, HorizontalAlignment = HorizontalAlignment.Right };
+            value.SetResourceReference(TextBlock.ForegroundProperty, "Ui.Text");
             var before = Ui.Text(row.Previous is { } pv ? $"{Ui.Limits(pv)} the week before" : row.Used is >= Ui.MultipleFrom ? "limits' worth" : "of one limit", DesignTokens.TypeScale.Caption, FontWeights.Normal, "Ui.Faint", false);
             before.HorizontalAlignment = HorizontalAlignment.Right;
-            var numbers = Ui.Stack(value, before);
+            var numbers = Ui.Stack(value, before); numbers.VerticalAlignment = VerticalAlignment.Center;
             UIElement change = row.Change is { } c
                 ? Ui.Pill(Math.Abs(c) < .1 ? "Steady" : (c > 0 ? "▲ " : "▼ ") + (c >= 3 ? $"{c + 1:0.#}×" : $"{Math.Round(Math.Abs(c) * 100):0}%"), Math.Abs(c) < .1 ? Palette.Unknown : accent, 11)
                 : new Border { Width = 0 };
             ((FrameworkElement)change).Margin = new Thickness(12, 0, 0, 0); ((FrameworkElement)change).VerticalAlignment = VerticalAlignment.Center;
             ((FrameworkElement)change).ToolTip = row.Change is null ? null : "Compared with the 7 days before, from the same daily totals as History";
-            var line = Ui.Columns((Ui.LogoTile(row.Id, 34).WithMargin(new Thickness(0, 0, 12, 0)), GridLength.Auto), (name, new GridLength(1, GridUnitType.Star)), (numbers, GridLength.Auto), (change, GridLength.Auto));
+            var line = Ui.Columns((badge, GridLength.Auto), (name, new GridLength(1, GridUnitType.Star)), (numbers, GridLength.Auto), (change, GridLength.Auto));
             var inner = Ui.Inner(line, new Thickness(12, 10, 14, 10)); inner.Margin = new Thickness(0, 0, 0, 8);
             stack.Children.Add(inner);
         }
@@ -58,6 +92,19 @@ public static class ReportView
             stack.Children.Add(list);
         }
 
+        if (r.Notes is { Count: > 0 } weekNotes)
+        {
+            var label = Ui.Text("Your notes", DesignTokens.TypeScale.Caption, FontWeights.SemiBold, "Ui.Muted", false); label.Margin = new Thickness(2, 6, 0, 6);
+            stack.Children.Add(label);
+            foreach (var n in weekNotes)
+            {
+                var row = Ui.Columns((Ui.Text(n.Date.ToString("ddd", CultureInfo.InvariantCulture), DesignTokens.TypeScale.Callout, FontWeights.SemiBold, "Ui.Muted", false).WithMargin(new Thickness(2, 0, 12, 0)), GridLength.Auto),
+                    (Ui.Text(n.Text, DesignTokens.TypeScale.Body, FontWeights.Normal, "Ui.Text"), new GridLength(1, GridUnitType.Star)));
+                row.Margin = new Thickness(0, 0, 0, 6);
+                stack.Children.Add(row);
+            }
+        }
+
         if (share is not null)
         {
             var status = Ui.Text("", DesignTokens.TypeScale.Caption, FontWeights.Normal, "Ui.Muted"); status.Margin = new Thickness(12, 0, 0, 0); status.VerticalAlignment = VerticalAlignment.Center;
@@ -70,7 +117,7 @@ public static class ReportView
     }
 
     /// <summary>Everything this PC has recorded for one limit, with no time limit.</summary>
-    public static Border AllTime(AllTimeTotals a, LimitWindow window, Color accent)
+    public static Border AllTime(AllTimeTotals a, LimitWindow window, Color accent, IReadOnlyList<PlanChange>? plans = null, bool use24 = false)
     {
         var limit = WeeklyReport.Lower(window.Label);
         var tiles = new UniformGrid2(4);
@@ -84,7 +131,15 @@ public static class ReportView
         title.Margin = new Thickness(0, 0, 0, 12);
         var note = Ui.Text("Kept on this PC with no time limit until you delete it in Settings › Data.", DesignTokens.TypeScale.Caption, FontWeights.Normal, "Ui.Faint");
         note.Margin = new Thickness(0, 2, 0, 0);
-        return Ui.Card(Ui.Stack(title, tiles.Panel, note), accent);
+        var stack = Ui.Stack(title, tiles.Panel);
+        if (plans is { Count: > 0 } && PlanTimeline.Build(plans, accent, use24) is { } timeline)
+        {
+            var label = Ui.Text("Plan history", DesignTokens.TypeScale.Caption, FontWeights.SemiBold, "Ui.Muted", false); label.Margin = new Thickness(0, 6, 0, 10);
+            stack.Children.Add(label); stack.Children.Add(timeline);
+            note.Margin = new Thickness(0, 12, 0, 0);
+        }
+        stack.Children.Add(note);
+        return Ui.Card(stack, accent);
     }
 
     private static Grid Tile(string label, string value, string note)

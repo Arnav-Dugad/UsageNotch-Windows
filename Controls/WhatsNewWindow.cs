@@ -13,15 +13,15 @@ public sealed class WhatsNewWindow : Window
 {
     public sealed record Item(string Glyph, string Title, string Text);
 
-    /// <summary>What 2.8 adds, in the order people will notice it.</summary>
+    /// <summary>What 2.9 adds, in the order people will notice it.</summary>
     public static readonly Item[] Release =
     [
-        new("", "This week, in plain English", "History opens with your week: how it compares with the week before, limits you hit, and your busiest day and hours."),
-        new("", "Share your week", "One click makes a story-sized image of your week, saves it to Pictures and copies it, ready to paste."),
-        new("", "Kept until you delete it", "History now shows 7, 30 or 90 days, plus all-time totals since your first reading."),
-        new("", "Forecast ranges", "\"Limit around 4:10 PM (likely 3:40–4:50 PM)\": the window you'll probably hit it in, not just one time."),
-        new("", "Classic style and a live tray ring", "Prefer solid cards? Choose Classic in Appearance. The tray icon now shows your usage as a ring."),
-        new("", "Official logos", "Gemini's new colours and the Codex mark, from the providers' published artwork."),
+        new("\uE9D9", "Your usage score", "One number for all your providers at the top of Overview: how much of your weekly limits you've used, and last week's."),
+        new("\uE787", "A smarter This week", "Compares each provider with your typical week, spots unusual days (\"twice your normal Tuesday\") and says when the PC saw too little to be sure."),
+        new("\uE70B", "Notes on days", "Click a day in History and add a note, like \"Big refactor\". It shows on the chart, in This week and on your phone."),
+        new("\uE8EF", "Tokens that mean something", "This month at API prices against your plan's price, tokens per session limit, model mix over 8 weeks, and weekly budgets for projects."),
+        new("\uE8C7", "Plan history", "When your plan changed, such as Pro → Max 5×, in History and on each provider's page."),
+        new("\uE768", "Motion that explains", "Rings fill one after another, numbers count up, 7, 30 and 90 days morph into each other, and the tray ring glows when you cross your warning level."),
     ];
 
     public static readonly Item[] Welcome =

@@ -175,8 +175,9 @@ public sealed class SharedEntry
 /// </summary>
 public static class SharedSettings
 {
-    public const int MaxEntries = 200;
-    private static readonly Regex Key = new(@"^(budget:[a-z0-9_:-]{1,40}\|[A-Za-z0-9_.:-]{1,100}|accent:[a-z0-9_:-]{1,40}|name:[a-z0-9_:-]{1,40}|order|alerts:thresholds|alerts:quiet)$", RegexOptions.CultureInvariant);
+    public const int MaxEntries = 300;
+    public const long MinProjectBudget = 100_000, MaxProjectBudget = 1_000_000_000_000;
+    private static readonly Regex Key = new(@"^(budget:[a-z0-9_:-]{1,40}\|[A-Za-z0-9_.:-]{1,100}|accent:[a-z0-9_:-]{1,40}|name:[a-z0-9_:-]{1,40}|order|alerts:thresholds|alerts:quiet|projectBudget:[a-z0-9_:-]{1,40}\|[^|\p{Cc}]{1,80})$", RegexOptions.CultureInvariant);
     private static readonly string[] PrimaryNames = ["claude", "codex", "gemini", "cursor"];
 
     /// <summary>What the fields say now. Defaults are left out, so untouched settings never outvote a phone.</summary>
@@ -190,6 +191,8 @@ public static class SharedSettings
         if (s.ProviderOrder.Count > 0) map["order"] = new JsonArray(s.ProviderOrder.Take(16).Select(id => (JsonNode?)id).ToArray());
         if (s.AlertWarnPercent != 80 || s.AlertCriticalPercent != 95) map["alerts:thresholds"] = new JsonObject { ["warn"] = s.AlertWarnPercent, ["critical"] = s.AlertCriticalPercent };
         if (s.QuietHoursEnabled || s.QuietStartHour != 22 || s.QuietEndHour != 8) map["alerts:quiet"] = new JsonObject { ["on"] = s.QuietHoursEnabled, ["start"] = s.QuietStartHour, ["end"] = s.QuietEndHour };
+        foreach (var (key, tokens) in s.ProjectBudgets)
+            if (Key.IsMatch("projectBudget:" + key) && tokens is >= MinProjectBudget and <= MaxProjectBudget) map["projectBudget:" + key] = new JsonObject { ["tokens"] = tokens };
         return map;
     }
 
@@ -249,6 +252,8 @@ public static class SharedSettings
         if (s.Shared.TryGetValue("alerts:thresholds", out var t) && t.V is JsonObject th)
         { s.AlertWarnPercent = Math.Clamp((int?)th["warn"] ?? 80, 1, 100); s.AlertCriticalPercent = Math.Clamp((int?)th["critical"] ?? 95, s.AlertWarnPercent, 100); }
         else if (s.Shared.ContainsKey("alerts:thresholds")) { s.AlertWarnPercent = 80; s.AlertCriticalPercent = 95; }
+        s.ProjectBudgets = s.Shared.Where(e => e.Key.StartsWith("projectBudget:") && e.Value.V is JsonObject o && (long?)o["tokens"] is >= MinProjectBudget and <= MaxProjectBudget)
+            .ToDictionary(e => e.Key["projectBudget:".Length..], e => (long)((JsonObject)e.Value.V!)["tokens"]!);
         if (s.Shared.TryGetValue("alerts:quiet", out var q) && q.V is JsonObject quiet)
         { s.QuietHoursEnabled = (bool?)quiet["on"] ?? false; s.QuietStartHour = Math.Clamp((int?)quiet["start"] ?? 22, 0, 23); s.QuietEndHour = Math.Clamp((int?)quiet["end"] ?? 8, 0, 23); }
         else if (s.Shared.ContainsKey("alerts:quiet")) { s.QuietHoursEnabled = false; s.QuietStartHour = 22; s.QuietEndHour = 8; }
@@ -277,6 +282,7 @@ public static class SharedSettings
             if (key.StartsWith("name:")) return v is JsonValue && ((string?)v)?.Length <= 18;
             if (key == "order") return v is JsonArray a && a.Count <= 16 && a.All(x => x is JsonValue && ((string?)x)?.Length is > 0 and <= 60);
             if (key == "alerts:thresholds") return v is JsonObject o && (int?)o["warn"] is >= 1 and <= 100 && (int?)o["critical"] is >= 1 and <= 100;
+            if (key.StartsWith("projectBudget:")) return v is JsonObject o && (long?)o["tokens"] is >= MinProjectBudget and <= MaxProjectBudget;
             if (key == "alerts:quiet") return v is JsonObject o && o["on"] is JsonValue && (int?)o["start"] is >= 0 and <= 23 && (int?)o["end"] is >= 0 and <= 23;
         }
         catch (Exception e) when (e is InvalidOperationException or FormatException) { return false; }

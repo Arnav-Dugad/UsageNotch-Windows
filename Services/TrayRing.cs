@@ -22,7 +22,7 @@ public static class TrayRing
         items.FirstOrDefault(i => i.Status is SnapshotStatus.Ok or SnapshotStatus.Stale && i.UsedFraction is not null);
 
     /// <summary>A new icon; the caller owns and disposes it.</summary>
-    public static Icon Draw(double used, bool remaining, bool dark)
+    public static Icon Draw(double used, bool remaining, bool dark, double pulse = 0)
     {
         used = Math.Clamp(used, 0, 1);
         var shown = remaining ? 1 - used : used;
@@ -34,6 +34,13 @@ public static class TrayRing
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             g.Clear(Color.Transparent);
             const float stroke = 4.5f; var r = new RectangleF(stroke / 2 + .5f, stroke / 2 + .5f, Size - stroke - 1, Size - stroke - 1);
+            // A glow behind the ring while it pulses (crossing your warning level): rises and falls once per pulse.
+            if (pulse > 0)
+            {
+                var alpha = (int)Math.Round(170 * Math.Sin(Math.Clamp(pulse, 0, 1) * Math.PI));
+                using var glow = new SolidBrush(Color.FromArgb(alpha, ink.R, ink.G, ink.B));
+                g.FillEllipse(glow, 0, 0, Size, Size);
+            }
             using (var disc = new SolidBrush(dark ? Color.FromArgb(235, 16, 18, 24) : Color.FromArgb(240, 250, 251, 253))) g.FillEllipse(disc, r);
             using (var track = new Pen(dark ? Color.FromArgb(70, 255, 255, 255) : Color.FromArgb(45, 0, 0, 0), stroke)) g.DrawEllipse(track, r);
             if (shown > .004)

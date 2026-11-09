@@ -30,12 +30,26 @@ public static class PhoneSnapshot
     /// </summary>
     public sealed record History(string Window, string Label, List<Day> Days, List<double> Heat, List<int> Observed, int Streak, List<Day>? Calendar = null,
         List<Point>? Trend = null, List<Unused>? Unused = null, List<Hit>? Hits = null, Reliability? Reliability = null, List<Event>? Events = null, List<Session>? Sessions = null,
-        AllTime? AllTime = null);
+        AllTime? AllTime = null, List<UnusualInfo>? Unusual = null);
+    public sealed record UnusualInfo(string Date, double Ratio, double Typical);
+    public sealed record ScoreRow(string Id, string Name, string Window, string Label, double Used);
+    public sealed record ScoreInfo(int Value, int? Previous, List<ScoreRow> Providers);
+    public sealed record NoteInfo(string Date, string Text, long At);
+    public sealed record PlanInfo(long At, string Plan);
+    public sealed record MonthInfo(string From, long Total, double? Cost);
+    public sealed record PlanPrice(string Name, double Price);
+    public sealed record PerLimitInfo(double Tokens, string Label);
+    public sealed record ModelTotal(string Name, long Total);
+    public sealed record ModelWeekInfo(string Week, List<ModelTotal> Models);
+    public sealed record BudgetInfo(long Tokens);
+    public sealed record ReportNote(string Date, string Text);
     /// <summary>Everything this PC has recorded for a window (feature "alltime"). Used is in limits: 2.5 = two and a half full limits.</summary>
     public sealed record AllTime(long Since, double Used, int ActiveDays, int RecordedDays, int Hits, string? BestDay, double BestUsed);
     /// <summary>"This week" (feature "report"): the last 7 local days against the 7 before, with sentences written on the PC.</summary>
-    public sealed record ReportInfo(string From, string To, long GeneratedAt, string Headline, string Summary, List<ReportRow> Providers, List<ReportLine> Insights);
-    public sealed record ReportRow(string Id, string Name, string Window, string Label, double? Used, double? Previous, double? Change, int ActiveDays, int Hits, string? BusiestDay, double? BusiestUsed, int Streak);
+    public sealed record ReportInfo(string From, string To, long GeneratedAt, string Headline, string Summary, List<ReportRow> Providers, List<ReportLine> Insights,
+        double? Coverage = null, string? Note = null, List<ReportNote>? Notes = null);
+    public sealed record ReportRow(string Id, string Name, string Window, string Label, double? Used, double? Previous, double? Change, int ActiveDays, int Hits, string? BusiestDay, double? BusiestUsed, int Streak,
+        double? Typical = null, double? TypicalChange = null);
     public sealed record ReportLine(string Kind, string? Provider, string Text);
     // Protocol 2 insights (docs/PHONE-PROTOCOL.md). Older phones ignore them.
     public sealed record Unused(long End, double Peak);
@@ -46,28 +60,31 @@ public static class PhoneSnapshot
     public sealed record Provider(string Id, string Name, string Status, List<Window> Windows,
         string? StatusText = null, string? Account = null, long? UpdatedAt = null, string? ManageUrl = null,
         string? Session = null, string? Weekly = null, List<Extra>? Extras = null, List<History>? History = null,
-        string? Kind = null, string? AccountLabel = null, string? Plan = null, List<Share>? Breakdown = null);
+        string? Kind = null, string? AccountLabel = null, string? Plan = null, List<Share>? Breakdown = null, List<PlanInfo>? Plans = null);
     /// <summary>A part of the week's usage as the provider reports it ("Claude Code", 100).</summary>
     public sealed record Share(string Name, double Percent);
     public sealed record IncidentInfo(string Provider, string Title, string Impact, string Status, string? Url, long UpdatedAt);
     public sealed record Totals(long Input, long Output, long CacheRead, long CacheWrite, long Total, double? Cost);
     public sealed record TokenDay(string Date, long Total, double? Cost);
-    public sealed record ShareInfo(string Name, long Total, double? Cost, double Share);
+    public sealed record ShareInfo(string Name, long Total, double? Cost, double Share, BudgetInfo? Budget = null);
     public sealed record TokenSource(string Id, string Label, Totals Today, Totals Week, List<TokenDay> Days, List<ShareInfo> Projects, List<ShareInfo> Models,
-        bool? AllDevices = null, long? Lifetime = null, long? PeakDaily = null, int? LongestStreak = null);
+        bool? AllDevices = null, long? Lifetime = null, long? PeakDaily = null, int? LongestStreak = null,
+        MonthInfo? Month = null, PlanPrice? Plan = null, PerLimitInfo? PerLimit = null, List<ModelWeekInfo>? ModelWeeks = null);
     public sealed record TokenInfo(long UpdatedAt, List<TokenSource> Sources);
     /// <summary>What a snapshot carries beyond the dock: protocol 2's heavier fields, local tokens and status-page incidents.</summary>
     public sealed record Extras(bool Detailed, IReadOnlyList<TokenReport> Tokens, IReadOnlyList<Services.Incident> Incidents, bool ShareProjects, int TrendPoints = 400,
-        WeekReport? Report = null, Func<ProviderSnapshot, LimitWindow, AllTimeTotals?>? AllTime = null)
+        WeekReport? Report = null, Func<ProviderSnapshot, LimitWindow, AllTimeTotals?>? AllTime = null,
+        UsageScore? Score = null, Func<TokenReport, TokenFacts?>? Facts = null, IReadOnlyDictionary<string, long>? ProjectBudgets = null)
     {
         public static readonly Extras None = new(false, [], [], false);
     }
-    public static readonly string[] Features = ["refresh", "settings", "trend", "insights", "tokens", "incidents", "accounts", "report", "alltime"];
+    public static readonly string[] Features = ["refresh", "settings", "trend", "insights", "tokens", "incidents", "accounts", "report", "alltime", "score", "notes", "plans", "tokens2"];
     /// <summary>Internet sync details for a paired phone. Only ever sent over the pinned, authenticated local link.</summary>
     public sealed record RelayInfo(string Url, string Key);
     public sealed record Snapshot(int Schema, long GeneratedAt, List<Provider> Providers, string? Source = null, string? AppVersion = null,
         RelayInfo? Relay = null, string? RelayState = null, int? Protocol = null, string[]? Features = null,
-        System.Text.Json.Nodes.JsonObject? Shared = null, List<IncidentInfo>? Incidents = null, TokenInfo? Tokens = null, ReportInfo? Report = null);
+        System.Text.Json.Nodes.JsonObject? Shared = null, List<IncidentInfo>? Incidents = null, TokenInfo? Tokens = null, ReportInfo? Report = null,
+        ScoreInfo? Score = null, List<NoteInfo>? Notes = null);
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
     public const int MaxProviders = 16, MaxWindows = 32, MaxPoints = 512, HistoryDays = 30, CalendarDays = 90;
@@ -118,28 +135,51 @@ public static class PhoneSnapshot
                 snapshot.FetchedAt?.ToUnixTimeMilliseconds(), ManageUrl(snapshot.ManageUrl),
                 session?.Id, weekly?.Id, unlimited.Count == 0 ? null : unlimited, summary is { Count: > 0 } ? summary : null,
                 ProviderKind.Of(snapshot.Id), settings.Accounts.FirstOrDefault(a => a.ProviderId == snapshot.Id) is { } extra ? (string.IsNullOrWhiteSpace(extra.Label) ? extra.Slug : extra.Label.Trim()) : null,
-                snapshot.Plan, snapshot.Breakdown is { Count: > 0 } shares ? shares.Take(8).Select(x => new Share(x.Name, Math.Round(x.Percent, 2))).ToList() : null));
+                snapshot.Plan, snapshot.Breakdown is { Count: > 0 } shares ? shares.Take(8).Select(x => new Share(x.Name, Math.Round(x.Percent, 2))).ToList() : null,
+                PlansFor(history, snapshot.Id, account)));
         }
         return new Snapshot(1, now.ToUnixTimeMilliseconds(), providers, "windows-app", AppVersion(), Protocol: 2, Features: Features,
             Shared: SharedSettings.ToJson(settings),
             Incidents: extras.Incidents.Count == 0 ? null : extras.Incidents.Take(8).Select(i => new IncidentInfo(i.Provider, i.Title, i.Impact, i.Status, i.Url, i.UpdatedAt.ToUnixTimeMilliseconds())).ToList(),
-            Tokens: extras.Tokens.Count == 0 ? null : new TokenInfo(now.ToUnixTimeMilliseconds(), extras.Tokens.Select(r => TokensFor(r, extras.ShareProjects)).ToList()),
-            Report: extras.Report is { } report ? ReportFor(report, now) : null);
+            Tokens: extras.Tokens.Count == 0 ? null : new TokenInfo(now.ToUnixTimeMilliseconds(), extras.Tokens.Select(r => TokensFor(r, extras.ShareProjects, extras.Facts?.Invoke(r), extras.ProjectBudgets)).ToList()),
+            Report: extras.Report is { } report ? ReportFor(report, now) : null,
+            Score: extras.Score is { } score ? new ScoreInfo(score.Value, score.Previous, score.Providers.Select(p => new ScoreRow(p.Id, p.Name, p.Window, p.Label, p.Used)).ToList()) : null,
+            Notes: NotesFor(history));
+    }
+
+    private static List<PlanInfo>? PlansFor(UsageHistory history, string provider, string account)
+    {
+        IReadOnlyList<PlanChange> plans;
+        lock (history) plans = history.Plans(provider, account);
+        return plans.Count == 0 ? null : plans.Select(p => new PlanInfo(p.At.ToUnixTimeMilliseconds(), p.Plan)).ToList();
+    }
+
+    public static List<NoteInfo>? NotesFor(UsageHistory history)
+    {
+        IReadOnlyList<DayNote> notes;
+        lock (history) notes = history.Notes();
+        return notes.Count == 0 ? null : notes.Select(n => new NoteInfo(Date(n.Date), n.Text, n.At)).ToList();
     }
 
     private static string Date(DateTime d) => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
     public static ReportInfo ReportFor(WeekReport r, DateTimeOffset now) => new(Date(r.From), Date(r.To), now.ToUnixTimeMilliseconds(), r.Headline, r.Summary,
-        r.Providers.Select(p => new ReportRow(p.Id, p.Name, p.Window, p.Label, p.Used, p.Previous, p.Change, p.ActiveDays, p.Hits, p.BusiestDay is { } d ? Date(d) : null, p.BusiestUsed, p.Streak)).ToList(),
-        r.Insights.Select(i => new ReportLine(i.Kind, i.Provider, i.Text)).ToList());
+        r.Providers.Select(p => new ReportRow(p.Id, p.Name, p.Window, p.Label, p.Used, p.Previous, p.Change, p.ActiveDays, p.Hits, p.BusiestDay is { } d ? Date(d) : null, p.BusiestUsed, p.Streak, p.Typical, p.TypicalChange)).ToList(),
+        r.Insights.Select(i => new ReportLine(i.Kind, i.Provider, i.Text)).ToList(), r.Coverage, r.Note,
+        r.Notes is { Count: > 0 } notes ? notes.Select(n => new ReportNote(Date(n.Date), n.Text)).ToList() : null);
 
-    private static TokenSource TokensFor(TokenReport r, bool projects)
+    private static TokenSource TokensFor(TokenReport r, bool projects, TokenFacts? facts = null, IReadOnlyDictionary<string, long>? budgets = null)
     {
         static Totals T(TokenTotals t) => new(t.Input, t.Output, t.CacheRead, t.CacheWrite, t.Total, t.Cost is { } c ? Math.Round(c, 4) : null);
         static List<ShareInfo> S(IEnumerable<TokenShare> list) => list.Select(x => new ShareInfo(x.Name, x.Total, x.Cost is { } c ? Math.Round(c, 4) : null, Math.Round(x.Share, 4))).ToList();
         return new TokenSource(r.Source, r.Label, T(r.Today), T(r.Week),
             r.Days.Select(d => new TokenDay(d.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), d.Total, d.Cost is { } c ? Math.Round(c, 4) : null)).ToList(),
-            projects ? S(r.Projects) : [], S(r.Models), r.AllDevices ? true : null, r.Lifetime, r.PeakDaily, r.LongestStreak);
+            projects ? S(r.Projects).Select(x => budgets?.GetValueOrDefault(r.Source + "|" + x.Name) is > 0 and var b ? x with { Budget = new BudgetInfo(b) } : x).ToList() : [],
+            S(r.Models), r.AllDevices ? true : null, r.Lifetime, r.PeakDaily, r.LongestStreak,
+            r.Month is { } m && r.MonthFrom is { } from ? new MonthInfo(from.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), m.Total, m.Cost is { } mc ? Math.Round(mc, 4) : null) : null,
+            facts is { PlanName: { } plan, PlanPrice: { } price } ? new PlanPrice(plan, price) : null,
+            facts is { PerLimit: { } per, LimitName: { } name } ? new PerLimitInfo(per, name) : null,
+            r.ModelWeeks is { Count: > 0 } weeks ? weeks.Select(w => new ModelWeekInfo(w.Start.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), w.Models.Select(x => new ModelTotal(x.Name, x.Total)).ToList())).ToList() : null);
     }
 
     /// <summary>The dock's own forecast, with the time the limit would be reached when that comes before the reset.</summary>
@@ -174,7 +214,8 @@ public static class PhoneSnapshot
         var value = new History(window.Id, window.Label, Days(summary.Days), summary.Heat.ToList(), summary.Observed.ToList(), summary.Streak, Days(summary.Calendar),
             Unused: summary.Unused.Select(u => new Unused(u.End.ToUnixTimeMilliseconds(), Math.Round(u.Peak, 4))).ToList(),
             Hits: summary.Hits.Select(h => new Hit(h.At.ToUnixTimeMilliseconds(), h.Reset?.ToUnixTimeMilliseconds())).ToList(),
-            Reliability: new Reliability(summary.Reliability.Periods, summary.Reliability.Fixed, summary.Reliability.Moved, summary.Reliability.AverageShiftMinutes, summary.Reliability.Confirmed, summary.Reliability.Changed));
+            Reliability: new Reliability(summary.Reliability.Periods, summary.Reliability.Fixed, summary.Reliability.Moved, summary.Reliability.AverageShiftMinutes, summary.Reliability.Confirmed, summary.Reliability.Changed),
+            Unusual: HistoryInsights.Unusual(summary.Calendar) is { Count: > 0 } odd ? odd.Select(u => new UnusualInfo(Date(u.Date), u.Ratio, u.Typical)).ToList() : null);
         if (extras.AllTime?.Invoke(snapshot, window) is { } all)
             value = value with { AllTime = new AllTime(all.Since.ToUnixTimeMilliseconds(), all.Used, all.ActiveDays, all.RecordedDays, all.Hits, all.BestDay is { } best ? Date(best) : null, all.BestUsed) };
         if (extras.Detailed)
