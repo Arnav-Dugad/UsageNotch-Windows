@@ -119,6 +119,27 @@ internal static class ReportChecks
         var many = Enumerable.Range(0, 12).Select(i => new ProviderViewModel(new ProviderSnapshot("claude:a" + i, "Claude · A very long account name " + i, "", Fidelity.Official, SnapshotStatus.Ok, [new LimitWindow("five_hour", "Current session", .5, null)]), new AppSettings())).ToList();
         Check(TrayRing.Tooltip(many, "UsageNotch 2.8.0").Length <= 127 && TrayRing.Tooltip([claude], "UsageNotch 2.8.0") == "UsageNotch 2.8.0\nClaude: 45% used", "tray tooltip lists providers within 127 characters");
 
+        // Every provider mark parses and draws inside its 24-unit box (packed SVG arc flags are written out).
+        var strip = new System.Windows.Media.DrawingVisual();
+        using (var dc = strip.RenderOpen())
+        {
+            dc.DrawRectangle(System.Windows.Media.Brushes.White, null, new Rect(0, 0, 6 * 120, 240));
+            var ids = new[] { "claude", "codex", "gemini", "cursor", "openai_api", "anthropic_api" };
+            for (var i = 0; i < ids.Length; i++)
+            {
+                Check(ProviderLogo.Shape(ProviderLogo.KeyFor(ids[i])) is { } g && g.Bounds.Left >= -0.5 && g.Bounds.Top >= -0.5 && g.Bounds.Right <= 24.5 && g.Bounds.Bottom <= 24.5 && g.Bounds.Width > 18, $"{ids[i]} logo fits its box ({ProviderLogo.Shape(ProviderLogo.KeyFor(ids[i]))?.Bounds})");
+                ProviderLogo.Draw(dc, ids[i], new Rect(i * 120 + 12, 12, 96, 96), System.Windows.Media.Brushes.Black, true);
+                ProviderLogo.Draw(dc, ids[i], new Rect(i * 120 + 12, 132, 96, 96), System.Windows.Media.Brushes.Black, false);
+            }
+        }
+        if (artifacts is not null)
+        {
+            var bmp = new RenderTargetBitmap(720, 240, 96, 96, System.Windows.Media.PixelFormats.Pbgra32); bmp.Render(strip);
+            Directory.CreateDirectory(artifacts);
+            using var file = File.Create(Path.Combine(artifacts, "logos.png"));
+            var enc = new PngBitmapEncoder(); enc.Frames.Add(BitmapFrame.Create(bmp)); enc.Save(file);
+        }
+
         // The share image.
         foreach (var (dark, classic) in new[] { (true, false), (false, false), (true, true) })
         {

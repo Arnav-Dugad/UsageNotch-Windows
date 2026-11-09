@@ -11,7 +11,7 @@ namespace UsageNotch.Controls;
 public sealed class ProviderLogo : FrameworkElement
 {
     private static readonly Dictionary<string, Geometry> Logos = LoadLogos();
-    internal static Geometry? Shape(string key) => Logos.GetValueOrDefault(key);
+    public static Geometry? Shape(string key) => Logos.GetValueOrDefault(key);
     public static readonly DependencyProperty ProviderProperty = DependencyProperty.Register(
         nameof(Provider), typeof(string), typeof(ProviderLogo), new FrameworkPropertyMetadata("codex", FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty ColoredProperty = DependencyProperty.Register(
@@ -59,7 +59,7 @@ public sealed class ProviderLogo : FrameworkElement
     private static Brush Frozen(Brush brush) { brush.Freeze(); return brush; }
 
     /// <summary>The artwork key for a provider id: Codex has its own mark; the OpenAI API keeps OpenAI's.</summary>
-    internal static string KeyFor(string provider) => UsageNotch.Services.ProviderKind.Of(provider ?? "") switch
+    public static string KeyFor(string provider) => UsageNotch.Services.ProviderKind.Of(provider ?? "") switch
     {
         "openai_api" => "openai", "gemini" => "googlegemini", "anthropic_api" => "claude", var kind => kind
     };

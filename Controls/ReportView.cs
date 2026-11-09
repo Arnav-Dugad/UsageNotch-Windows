@@ -75,7 +75,7 @@ public static class ReportView
         var limit = WeeklyReport.Lower(window.Label);
         var tiles = new UniformGrid2(4);
         tiles.Add(Tile("Total", Ui.Limits(a.Used), a.Used >= Ui.MultipleFrom ? $"full {limit} limits' worth" : $"of one {limit} limit"));
-        tiles.Add(Tile("Active days", a.ActiveDays.ToString("N0", CultureInfo.InvariantCulture), $"of {a.RecordedDays:N0} days with readings"));
+        tiles.Add(Tile("Active days", a.ActiveDays.ToString("N0", CultureInfo.InvariantCulture), $"of {a.RecordedDays:N0} recorded day{(a.RecordedDays == 1 ? "" : "s")}"));
         tiles.Add(Tile("Limits reached", a.Hits.ToString("N0", CultureInfo.InvariantCulture), a.Hits == 1 ? "time it hit 100%" : "times it hit 100%"));
         tiles.Add(Tile("Best day", a.BestDay is { } best ? best.ToString("MMM d, yyyy", CultureInfo.InvariantCulture) : "—", a.BestDay is null ? "no usage yet" : $"{Ui.Limits(a.BestUsed)} of the limit"));
         var title = Ui.Columns((Ui.Icon("", 15, "Ui.Muted", new Thickness(0, 0, 10, 0)), GridLength.Auto),
